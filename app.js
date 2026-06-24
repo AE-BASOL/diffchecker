@@ -463,7 +463,7 @@ function syncHighlightScroll(textarea) {
 }
 
 function setEditorHeight(height) {
-  const next = Math.max(260, Math.min(6000, Math.round(height)));
+  const next = Math.max(260, Math.round(height));
   document.documentElement.style.setProperty("--editor-height", `${next}px`);
 }
 
