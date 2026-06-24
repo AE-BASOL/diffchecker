@@ -80,18 +80,6 @@ function lineDiff(leftLines, rightLines) {
       });
       i += 1;
       j += 1;
-    } else if (i < leftLines.length && j < rightLines.length && matrix[i + 1][j] === matrix[i][j + 1]) {
-      rows.push({
-        type: "change",
-        left: leftLines[i],
-        right: rightLines[j],
-        leftNo: i + 1,
-        rightNo: j + 1,
-        leftIndex: i,
-        rightIndex: j
-      });
-      i += 1;
-      j += 1;
     } else if (j < rightLines.length && (i === leftLines.length || matrix[i][j + 1] >= matrix[i + 1][j])) {
       rows.push({
         type: "insert",
@@ -123,24 +111,69 @@ function lineDiff(leftLines, rightLines) {
 function pairDeleteInsertRows(rows) {
   const paired = [];
   for (let index = 0; index < rows.length; index += 1) {
-    const current = rows[index];
-    const next = rows[index + 1];
-    if (current?.type === "delete" && next?.type === "insert") {
-      paired.push({
-        type: "change",
-        left: current.left,
-        right: next.right,
-        leftNo: current.leftNo,
-        rightNo: next.rightNo,
-        leftIndex: current.leftIndex,
-        rightIndex: next.rightIndex
-      });
-      index += 1;
-    } else {
-      paired.push(current);
+    if (rows[index].type === "equal") {
+      paired.push(rows[index]);
+      continue;
     }
+
+    const block = [];
+    while (index < rows.length && rows[index].type !== "equal") {
+      block.push(rows[index]);
+      index += 1;
+    }
+    index -= 1;
+
+    paired.push(...pairChangeBlock(block));
   }
   return paired;
+}
+
+function pairChangeBlock(block) {
+  const deletes = block.filter((row) => row.type === "delete");
+  const inserts = block.filter((row) => row.type === "insert");
+  if (!deletes.length || !inserts.length) return block;
+
+  const maxSize = Math.max(deletes.length, inserts.length);
+  const sizeRatio = maxSize / Math.max(1, Math.min(deletes.length, inserts.length));
+  const shouldPair = maxSize <= 4 && sizeRatio <= 1.5 && averageLineSimilarity(deletes, inserts) >= 0.18;
+  if (!shouldPair) return [...deletes, ...inserts];
+
+  const paired = [];
+  const pairCount = Math.min(deletes.length, inserts.length);
+  for (let offset = 0; offset < pairCount; offset += 1) {
+    paired.push({
+      type: "change",
+      left: deletes[offset].left,
+      right: inserts[offset].right,
+      leftNo: deletes[offset].leftNo,
+      rightNo: inserts[offset].rightNo,
+      leftIndex: deletes[offset].leftIndex,
+      rightIndex: inserts[offset].rightIndex
+    });
+  }
+  return paired.concat(deletes.slice(pairCount), inserts.slice(pairCount));
+}
+
+function averageLineSimilarity(deletes, inserts) {
+  const pairCount = Math.min(deletes.length, inserts.length);
+  if (!pairCount) return 0;
+  let total = 0;
+  for (let index = 0; index < pairCount; index += 1) {
+    total += lineSimilarity(deletes[index].left, inserts[index].right);
+  }
+  return total / pairCount;
+}
+
+function lineSimilarity(left, right) {
+  const leftWords = new Set(normalize(left).match(/[^\s,.;:()[\]{}]+/g) || []);
+  const rightWords = new Set(normalize(right).match(/[^\s,.;:()[\]{}]+/g) || []);
+  if (!leftWords.size && !rightWords.size) return 1;
+  if (!leftWords.size || !rightWords.size) return 0;
+  let overlap = 0;
+  leftWords.forEach((word) => {
+    if (rightWords.has(word)) overlap += 1;
+  });
+  return overlap / Math.max(leftWords.size, rightWords.size);
 }
 
 function tokenDiff(left, right) {
