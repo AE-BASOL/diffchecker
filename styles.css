@@ -143,6 +143,8 @@ h2 {
 }
 
 textarea {
+  position: relative;
+  z-index: 1;
   width: 100%;
   height: var(--editor-height);
   min-height: 240px;
@@ -168,6 +170,7 @@ textarea {
 
 .highlight-layer {
   position: absolute;
+  z-index: 0;
   inset: 0;
   overflow: auto;
   padding: 15px;
