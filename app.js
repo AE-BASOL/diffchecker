@@ -1,6 +1,5 @@
 const originalInput = document.querySelector("#originalInput");
 const modifiedInput = document.querySelector("#modifiedInput");
-const diffTable = document.querySelector("#diffTable");
 const stats = document.querySelector("#stats");
 const patchOutput = document.querySelector("#patchOutput");
 const originalHighlights = document.querySelector("#originalHighlights");
@@ -12,6 +11,7 @@ const showOnlyChanges = document.querySelector("#showOnlyChanges");
 const linePopover = document.querySelector("#linePopover");
 let currentRows = [];
 let manualEditorHeight = 0;
+let currentPopover = null;
 
 const sampleOriginal = `Invoice #4102
 Customer: Atlas Market
@@ -357,40 +357,25 @@ async function copyRowText(rowId, side) {
 
 function hidePopover() {
   linePopover.classList.remove("open");
+  linePopover.classList.remove("explaining");
   linePopover.setAttribute("aria-hidden", "true");
   linePopover.innerHTML = "";
+  currentPopover = null;
   clearHoveredHighlights();
 }
 
-function showPopover(cell) {
-  const rowId = Number(cell.dataset.rowId);
-  const side = cell.dataset.side;
-  const row = currentRows.find((item) => item.id === rowId);
-  if (!row || row.type === "equal") return;
+function changedRows() {
+  return currentRows.filter((row) => row.type !== "equal");
+}
 
-  const rect = cell.getBoundingClientRect();
-  const mergeIntoThis = side === "left" ? "Merge modified here" : "Merge original here";
-  const mergeOtherWay = side === "left" ? "Merge original to modified" : "Merge modified to original";
-  const targetThis = side;
-  const targetOther = side === "left" ? "right" : "left";
-  const canDelete = side === "left" ? row.leftNo !== "" : row.rightNo !== "";
+function changeIndexForRow(rowId) {
+  return changedRows().findIndex((row) => row.id === rowId);
+}
 
-  linePopover.innerHTML = `
-    <div class="popover-heading">
-      <p class="popover-kicker">Line action</p>
-      <p class="popover-title">Choose how to resolve this difference</p>
-    </div>
-    <button class="popover-button" type="button" data-action="merge" data-target="${targetThis}" data-row-id="${rowId}">${mergeIntoThis}</button>
-    <button class="popover-button" type="button" data-action="merge" data-target="${targetOther}" data-row-id="${rowId}">${mergeOtherWay}</button>
-    <button class="popover-button danger" type="button" data-action="delete" data-side="${side}" data-row-id="${rowId}" ${canDelete ? "" : "disabled"}>Delete line</button>
-  `;
-
-  const left = Math.min(rect.left + 18, window.innerWidth - 220);
-  const top = Math.min(rect.top + 28, window.innerHeight - 150);
-  linePopover.style.left = `${Math.max(10, left)}px`;
-  linePopover.style.top = `${Math.max(10, top)}px`;
-  linePopover.classList.add("open");
-  linePopover.setAttribute("aria-hidden", "false");
+function explainText(row) {
+  if (row.type === "insert") return "This line exists only in Modified. Merge left to add it to Original, or merge right to remove it from Modified.";
+  if (row.type === "delete") return "This line exists only in Original. Merge right to add it to Modified, or merge left to remove it from Original.";
+  return "Both sides changed on this line. Pick the side that should become the source of truth.";
 }
 
 function rowForEditorLine(side, lineIndex) {
@@ -408,31 +393,67 @@ function showEditorPopover(textarea, side, event) {
     hidePopover();
     return;
   }
+  showChangePopover(row, side, event.clientX, event.clientY);
+}
 
-  const mergeIntoThis = side === "left" ? "Use modified here" : "Use original here";
-  const mergeOtherWay = side === "left" ? "Send original to modified" : "Send modified to original";
-  const targetThis = side;
-  const targetOther = side === "left" ? "right" : "left";
-
-  linePopover.innerHTML = `
-    <div class="popover-heading">
-      <p class="popover-kicker">Difference</p>
-      <p class="popover-title">Resolve this highlighted line</p>
-    </div>
-    <button class="popover-button" type="button" data-action="merge" data-target="${targetThis}" data-row-id="${row.id}">${mergeIntoThis}</button>
-    <button class="popover-button" type="button" data-action="merge" data-target="${targetOther}" data-row-id="${row.id}">${mergeOtherWay}</button>
-    <button class="popover-button" type="button" data-action="copy" data-side="${side}" data-row-id="${row.id}">Copy line</button>
-    <button class="popover-button danger" type="button" data-action="delete" data-side="${side}" data-row-id="${row.id}">Delete line</button>
-  `;
+function showChangePopover(row, side, clientX, clientY) {
+  const changes = changedRows();
+  const changeIndex = changeIndexForRow(row.id);
+  const previousDisabled = changeIndex <= 0 ? " disabled" : "";
+  const nextDisabled = changeIndex >= changes.length - 1 ? " disabled" : "";
 
   markHoveredRow(row.id);
+  currentPopover = { rowId: row.id, side, x: clientX, y: clientY };
 
-  const left = Math.min(event.clientX + 10, window.innerWidth - 280);
-  const top = Math.min(event.clientY + 10, window.innerHeight - 190);
+  linePopover.innerHTML = `
+    <header class="change-popover-header">
+      <div class="change-popover-count"><strong>Change</strong><span>${changeIndex + 1} of ${changes.length}</span></div>
+      <div class="change-popover-nav">
+        <button class="button ghost" type="button" data-action="previous-change"${previousDisabled}>Previous change</button>
+        <button class="button ghost" type="button" data-action="next-change"${nextDisabled}>Next change</button>
+      </div>
+      <button class="button copy-change" type="button" data-action="copy" data-side="${side}" data-row-id="${row.id}">Copy</button>
+      <button class="button explain-change" type="button" data-action="explain">Explain</button>
+    </header>
+    <div class="change-popover-body">
+      <div class="change-preview left">
+        <div class="change-line-no">${row.leftNo || ""}</div>
+        <div class="change-line-text">${escapeHtml(row.left) || "&nbsp;"}</div>
+      </div>
+      <div class="change-preview right">
+        <div class="change-line-no">${row.rightNo || ""}</div>
+        <div class="change-line-text">${escapeHtml(row.right) || "&nbsp;"}</div>
+      </div>
+    </div>
+    <div class="change-popover-actions">
+      <button class="merge-popover left" type="button" data-action="merge" data-target="right" data-row-id="${row.id}">Merge change ›</button>
+      <button class="close-popover" type="button" data-action="close" aria-label="Close">×</button>
+      <button class="merge-popover right" type="button" data-action="merge" data-target="left" data-row-id="${row.id}">‹ Merge change</button>
+    </div>
+    <div class="change-popover-footer">
+      <button class="text-action" type="button" data-action="copy" data-side="left" data-row-id="${row.id}">Copy original</button>
+      <button class="text-action" type="button" data-action="copy" data-side="right" data-row-id="${row.id}">Copy modified</button>
+      <button class="text-action danger" type="button" data-action="delete" data-side="${side}" data-row-id="${row.id}">Delete selected side</button>
+    </div>
+    <p class="change-popover-explanation">${explainText(row)}</p>
+  `;
+
+  const left = Math.min(clientX + 10, window.innerWidth - Math.min(1180, window.innerWidth - 24));
+  const top = Math.min(clientY + 12, window.innerHeight - 320);
   linePopover.style.left = `${Math.max(10, left)}px`;
   linePopover.style.top = `${Math.max(10, top)}px`;
   linePopover.classList.add("open");
   linePopover.setAttribute("aria-hidden", "false");
+}
+
+function showAdjacentChange(direction) {
+  if (!currentPopover) return;
+  const changes = changedRows();
+  const currentIndex = changeIndexForRow(currentPopover.rowId);
+  const nextIndex = Math.max(0, Math.min(changes.length - 1, currentIndex + direction));
+  const row = changes[nextIndex];
+  if (!row) return;
+  showChangePopover(row, currentPopover.side, currentPopover.x, currentPopover.y);
 }
 
 function syncHighlightScroll(textarea) {
@@ -513,27 +534,25 @@ function handleEditorHover(textarea, side, event) {
 document.querySelector("#compareButton").addEventListener("click", compare);
 document.querySelector("#mergeAllLeftButton").addEventListener("click", () => mergeAll("left"));
 document.querySelector("#mergeAllRightButton").addEventListener("click", () => mergeAll("right"));
-if (diffTable) {
-  diffTable.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-merge]");
-    if (button) {
-      hidePopover();
-      mergeRow(Number(button.dataset.rowId), button.dataset.merge);
-      return;
-    }
-
-    const cell = event.target.closest(".diff-cell[data-row-id]");
-    if (cell) {
-      showPopover(cell);
-      return;
-    }
-
-    hidePopover();
-  });
-}
 linePopover.addEventListener("click", (event) => {
   const button = event.target.closest("[data-action]");
   if (!button || button.disabled) return;
+  if (button.dataset.action === "close") {
+    hidePopover();
+    return;
+  }
+  if (button.dataset.action === "previous-change") {
+    showAdjacentChange(-1);
+    return;
+  }
+  if (button.dataset.action === "next-change") {
+    showAdjacentChange(1);
+    return;
+  }
+  if (button.dataset.action === "explain") {
+    linePopover.classList.toggle("explaining");
+    return;
+  }
   if (button.dataset.action === "merge") mergeRow(Number(button.dataset.rowId), button.dataset.target);
   if (button.dataset.action === "delete") deleteLine(Number(button.dataset.rowId), button.dataset.side);
   if (button.dataset.action === "copy") copyRowText(Number(button.dataset.rowId), button.dataset.side);
