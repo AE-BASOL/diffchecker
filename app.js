@@ -1,5 +1,6 @@
 const originalInput = document.querySelector("#originalInput");
 const modifiedInput = document.querySelector("#modifiedInput");
+const alignedDiff = document.querySelector("#alignedDiff");
 const stats = document.querySelector("#stats");
 const patchOutput = document.querySelector("#patchOutput");
 const originalHighlights = document.querySelector("#originalHighlights");
@@ -264,6 +265,7 @@ function renderMergeControls(row) {
 
 function renderRows(rows) {
   renderEditorHighlights(rows);
+  renderAlignedDiff(rows);
 }
 
 function createPatch(rows) {
@@ -324,6 +326,33 @@ function renderEditorHighlights(rows) {
   renderHighlightLayer(modifiedHighlights, splitLines(modifiedInput.value), rows, "right");
   syncHighlightScroll(originalInput);
   syncHighlightScroll(modifiedInput);
+}
+
+function renderAlignedDiff(rows) {
+  const visibleRows = showOnlyChanges.checked ? rows.filter((row) => row.type !== "equal") : rows;
+  if (!visibleRows.length) {
+    alignedDiff.innerHTML = `<div class="empty-state">No differences found.</div>`;
+    return;
+  }
+
+  alignedDiff.innerHTML = visibleRows.map((row) => {
+    const leftType = row.type === "delete" || row.type === "change" ? "delete" : row.type === "insert" ? "empty" : "equal";
+    const rightType = row.type === "insert" || row.type === "change" ? "insert" : row.type === "delete" ? "empty" : "equal";
+    return `<div class="aligned-row" data-row-id="${row.id}">
+      ${renderAlignedCell(row, "left", leftType)}
+      ${renderAlignedCell(row, "right", rightType)}
+    </div>`;
+  }).join("");
+}
+
+function renderAlignedCell(row, side, type) {
+  const lineNo = side === "left" ? row.leftNo : row.rightNo;
+  const text = side === "left" ? row.left : row.right;
+  const content = type === "empty" ? "&nbsp;" : escapeHtml(text) || "&nbsp;";
+  return `<div class="aligned-cell ${type}" data-side="${side}">
+    <div class="aligned-no">${lineNo || ""}</div>
+    <div class="aligned-text">${content}</div>
+  </div>`;
 }
 
 function joinLines(lines) {
@@ -555,6 +584,8 @@ function clearHoveredHighlights() {
 function markHoveredRow(rowId) {
   clearHoveredHighlights();
   document.querySelectorAll(`.highlight-line[data-row-id="${rowId}"]`).forEach((line) => line.classList.add("hovered"));
+  document.querySelectorAll(".aligned-row.hovered").forEach((row) => row.classList.remove("hovered"));
+  document.querySelector(`.aligned-row[data-row-id="${rowId}"]`)?.classList.add("hovered");
 }
 
 function handleEditorHover(textarea, side, event) {
@@ -569,6 +600,25 @@ function handleEditorHover(textarea, side, event) {
 document.querySelector("#compareButton").addEventListener("click", compare);
 document.querySelector("#mergeAllLeftButton").addEventListener("click", () => mergeAll("left"));
 document.querySelector("#mergeAllRightButton").addEventListener("click", () => mergeAll("right"));
+alignedDiff.addEventListener("mousemove", (event) => {
+  const rowEl = event.target.closest(".aligned-row[data-row-id]");
+  if (!rowEl) {
+    clearHoveredHighlights();
+    return;
+  }
+  markHoveredRow(Number(rowEl.dataset.rowId));
+});
+alignedDiff.addEventListener("mouseleave", () => {
+  if (!linePopover.classList.contains("open")) clearHoveredHighlights();
+});
+alignedDiff.addEventListener("click", (event) => {
+  const rowEl = event.target.closest(".aligned-row[data-row-id]");
+  if (!rowEl) return;
+  const row = currentRows.find((item) => item.id === Number(rowEl.dataset.rowId));
+  if (!row || row.type === "equal") return;
+  const side = event.target.closest(".aligned-cell")?.dataset.side || "right";
+  showChangePopover(row, side, event.clientX, event.clientY);
+});
 linePopover.addEventListener("click", (event) => {
   const button = event.target.closest("[data-action]");
   if (!button || button.disabled) return;

@@ -275,6 +275,89 @@ body.resizing-editors {
   font-weight: 800;
 }
 
+.aligned-diff-shell {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.aligned-diff-header,
+.aligned-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.aligned-diff-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--panel-dark);
+  color: #fff;
+  font-weight: 850;
+}
+
+.aligned-diff-header > div {
+  padding: 12px 14px;
+}
+
+.aligned-diff-header > div + div,
+.aligned-cell + .aligned-cell {
+  border-left: 1px solid var(--line);
+}
+
+.aligned-row {
+  min-height: 31px;
+  border-top: 1px solid #ece8df;
+}
+
+.aligned-row:hover .aligned-cell.delete,
+.aligned-row:hover .aligned-cell.insert,
+.aligned-row.hovered .aligned-cell.delete,
+.aligned-row.hovered .aligned-cell.insert {
+  filter: saturate(1.15);
+  box-shadow: inset 0 0 0 2px rgba(13, 107, 95, 0.38);
+}
+
+.aligned-cell {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  min-width: 0;
+  background: #fff;
+  font-family: "Cascadia Mono", "Consolas", monospace;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.aligned-cell.delete {
+  background: var(--delete-bg);
+  color: var(--delete-ink);
+}
+
+.aligned-cell.insert {
+  background: var(--insert-bg);
+  color: var(--insert-ink);
+}
+
+.aligned-cell.empty {
+  background: #f7f4ed;
+}
+
+.aligned-no {
+  padding: 6px 9px;
+  border-right: 1px solid rgba(0, 0, 0, 0.08);
+  color: #9a958b;
+  text-align: right;
+  user-select: none;
+}
+
+.aligned-text {
+  padding: 6px 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .diff-shell {
   overflow: hidden;
   border: 1px solid var(--line);
