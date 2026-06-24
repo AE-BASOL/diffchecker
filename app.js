@@ -11,6 +11,7 @@ const ignoreCase = document.querySelector("#ignoreCase");
 const showOnlyChanges = document.querySelector("#showOnlyChanges");
 const linePopover = document.querySelector("#linePopover");
 let currentRows = [];
+let manualEditorHeight = 0;
 
 const sampleOriginal = `Invoice #4102
 Customer: Atlas Market
@@ -250,6 +251,7 @@ function createPatch(rows) {
 }
 
 function compare() {
+  autoFitEditors();
   const rows = lineDiff(splitLines(originalInput.value), splitLines(modifiedInput.value))
     .map((row, id) => ({ ...row, id }));
   currentRows = rows;
@@ -264,17 +266,23 @@ function compare() {
 }
 
 function highlightClassForLine(rows, side, lineIndex) {
-  const row = rows.find((item) => side === "left" ? item.leftIndex === lineIndex && item.leftNo !== "" : item.rightIndex === lineIndex && item.rightNo !== "");
+  const row = rowForHighlightLine(rows, side, lineIndex);
   if (!row || row.type === "equal") return "";
   if (row.type === "change") return side === "left" ? "delete" : "insert";
   return row.type;
 }
 
+function rowForHighlightLine(rows, side, lineIndex) {
+  return rows.find((item) => side === "left" ? item.leftIndex === lineIndex && item.leftNo !== "" : item.rightIndex === lineIndex && item.rightNo !== "");
+}
+
 function renderHighlightLayer(layer, lines, rows, side) {
   layer.innerHTML = lines.map((line, index) => {
     const className = highlightClassForLine(rows, side, index);
+    const row = rowForHighlightLine(rows, side, index);
     const content = escapeHtml(line) || "&nbsp;";
-    return `<div class="highlight-line ${className}">${content}</div>`;
+    const rowAttr = row && row.type !== "equal" ? ` data-row-id="${row.id}"` : "";
+    return `<div class="highlight-line ${className}" data-line-index="${index}"${rowAttr}>${content}</div>`;
   }).join("");
 }
 
@@ -344,6 +352,7 @@ function hidePopover() {
   linePopover.classList.remove("open");
   linePopover.setAttribute("aria-hidden", "true");
   linePopover.innerHTML = "";
+  clearHoveredHighlights();
 }
 
 function showPopover(cell) {
@@ -360,6 +369,10 @@ function showPopover(cell) {
   const canDelete = side === "left" ? row.leftNo !== "" : row.rightNo !== "";
 
   linePopover.innerHTML = `
+    <div class="popover-heading">
+      <p class="popover-kicker">Line action</p>
+      <p class="popover-title">Choose how to resolve this difference</p>
+    </div>
     <button class="popover-button" type="button" data-action="merge" data-target="${targetThis}" data-row-id="${rowId}">${mergeIntoThis}</button>
     <button class="popover-button" type="button" data-action="merge" data-target="${targetOther}" data-row-id="${rowId}">${mergeOtherWay}</button>
     <button class="popover-button danger" type="button" data-action="delete" data-side="${side}" data-row-id="${rowId}" ${canDelete ? "" : "disabled"}>Delete line</button>
@@ -387,25 +400,31 @@ function lineIndexFromCaret(textarea) {
 }
 
 function showEditorPopover(textarea, side, event) {
-  const row = rowForEditorLine(side, lineIndexFromCaret(textarea));
+  const row = rowForEditorLine(side, lineIndexFromPointer(textarea, event));
   if (!row) {
     hidePopover();
     return;
   }
 
-  const mergeIntoThis = side === "left" ? "Geçir: Modified -> Original" : "Geçir: Original -> Modified";
-  const mergeOtherWay = side === "left" ? "Original'ı Modified'a geçir" : "Modified'ı Original'a geçir";
+  const mergeIntoThis = side === "left" ? "Use modified here" : "Use original here";
+  const mergeOtherWay = side === "left" ? "Send original to modified" : "Send modified to original";
   const targetThis = side;
   const targetOther = side === "left" ? "right" : "left";
 
   linePopover.innerHTML = `
+    <div class="popover-heading">
+      <p class="popover-kicker">Difference</p>
+      <p class="popover-title">Resolve this highlighted line</p>
+    </div>
     <button class="popover-button" type="button" data-action="merge" data-target="${targetThis}" data-row-id="${row.id}">${mergeIntoThis}</button>
     <button class="popover-button" type="button" data-action="merge" data-target="${targetOther}" data-row-id="${row.id}">${mergeOtherWay}</button>
     <button class="popover-button danger" type="button" data-action="delete" data-side="${side}" data-row-id="${row.id}">Delete line</button>
   `;
 
-  const left = Math.min(event.clientX + 8, window.innerWidth - 230);
-  const top = Math.min(event.clientY + 8, window.innerHeight - 150);
+  markHoveredRow(row.id);
+
+  const left = Math.min(event.clientX + 10, window.innerWidth - 280);
+  const top = Math.min(event.clientY + 10, window.innerHeight - 190);
   linePopover.style.left = `${Math.max(10, left)}px`;
   linePopover.style.top = `${Math.max(10, top)}px`;
   linePopover.classList.add("open");
@@ -419,15 +438,23 @@ function syncHighlightScroll(textarea) {
 }
 
 function setEditorHeight(height) {
-  const next = Math.max(260, Math.min(1400, Math.round(height)));
+  const next = Math.max(260, Math.min(6000, Math.round(height)));
   document.documentElement.style.setProperty("--editor-height", `${next}px`);
-  localStorage.setItem("diffcheckerEditorHeight", String(next));
+}
+
+function autoFitEditors() {
+  [originalInput, modifiedInput].forEach((textarea) => {
+    textarea.style.height = "auto";
+  });
+  const contentHeight = Math.max(originalInput.scrollHeight, modifiedInput.scrollHeight, 560);
+  const nextHeight = Math.max(contentHeight + 2, manualEditorHeight);
+  setEditorHeight(nextHeight);
+  [originalInput, modifiedInput].forEach((textarea) => {
+    textarea.style.height = "";
+  });
 }
 
 function installEditorResize() {
-  const savedHeight = Number(localStorage.getItem("diffcheckerEditorHeight"));
-  if (savedHeight) setEditorHeight(savedHeight);
-
   let startY = 0;
   let startHeight = 0;
 
@@ -440,7 +467,8 @@ function installEditorResize() {
 
   editorResizeHandle.addEventListener("pointermove", (event) => {
     if (!editorResizeHandle.hasPointerCapture(event.pointerId)) return;
-    setEditorHeight(startHeight + event.clientY - startY);
+    manualEditorHeight = Math.max(0, startHeight + event.clientY - startY);
+    autoFitEditors();
   });
 
   editorResizeHandle.addEventListener("pointerup", (event) => {
@@ -449,6 +477,33 @@ function installEditorResize() {
     }
     document.body.classList.remove("resizing-editors");
   });
+}
+
+function lineIndexFromPointer(textarea, event) {
+  const rect = textarea.getBoundingClientRect();
+  const style = window.getComputedStyle(textarea);
+  const lineHeight = Number.parseFloat(style.lineHeight);
+  const paddingTop = Number.parseFloat(style.paddingTop);
+  const y = event.clientY - rect.top + textarea.scrollTop - paddingTop;
+  return Math.max(0, Math.floor(y / lineHeight));
+}
+
+function clearHoveredHighlights() {
+  document.querySelectorAll(".highlight-line.hovered").forEach((line) => line.classList.remove("hovered"));
+}
+
+function markHoveredRow(rowId) {
+  clearHoveredHighlights();
+  document.querySelectorAll(`.highlight-line[data-row-id="${rowId}"]`).forEach((line) => line.classList.add("hovered"));
+}
+
+function handleEditorHover(textarea, side, event) {
+  const row = rowForEditorLine(side, lineIndexFromPointer(textarea, event));
+  if (!row) {
+    clearHoveredHighlights();
+    return;
+  }
+  markHoveredRow(row.id);
 }
 
 document.querySelector("#compareButton").addEventListener("click", compare);
@@ -510,6 +565,14 @@ document.querySelector("#copyPatchButton").addEventListener("click", async () =>
 [originalInput, modifiedInput].forEach((input) => input.addEventListener("input", compare));
 [originalInput, modifiedInput].forEach((input) => {
   input.addEventListener("scroll", () => syncHighlightScroll(input));
+});
+originalInput.addEventListener("mousemove", (event) => handleEditorHover(originalInput, "left", event));
+modifiedInput.addEventListener("mousemove", (event) => handleEditorHover(modifiedInput, "right", event));
+originalInput.addEventListener("mouseleave", () => {
+  if (!linePopover.classList.contains("open")) clearHoveredHighlights();
+});
+modifiedInput.addEventListener("mouseleave", () => {
+  if (!linePopover.classList.contains("open")) clearHoveredHighlights();
 });
 originalInput.addEventListener("click", (event) => showEditorPopover(originalInput, "left", event));
 modifiedInput.addEventListener("click", (event) => showEditorPopover(modifiedInput, "right", event));
