@@ -11,8 +11,10 @@
   --accent-strong: #094e46;
   --insert-bg: #e4f5ea;
   --insert-ink: #14572e;
+  --insert-strong: #119c87;
   --delete-bg: #fae5e2;
   --delete-ink: #8f2d20;
+  --delete-strong: #e6492f;
   --change-bg: #fff3c4;
   --change-ink: #6f5300;
   --shadow: 0 22px 80px rgba(29, 31, 35, 0.12);
@@ -263,6 +265,195 @@ body.resizing-editors {
   color: var(--muted);
   font-size: 13px;
   font-weight: 800;
+}
+
+.review-shell {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fffefa;
+  box-shadow: var(--shadow);
+}
+
+.review-scroll {
+  max-height: min(72vh, 820px);
+  overflow: auto;
+  padding: 0 6px 22px;
+}
+
+.review-line,
+.change-card-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 38px;
+}
+
+.review-line {
+  min-height: 26px;
+  color: #585a5c;
+  font-family: "Cascadia Mono", "Consolas", monospace;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.review-cell {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  min-width: 0;
+}
+
+.review-no {
+  padding: 4px 10px 4px 0;
+  color: #a9acae;
+  text-align: right;
+  user-select: none;
+}
+
+.review-text {
+  padding: 4px 12px;
+  border-left: 1px solid #ece8df;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.change-card {
+  margin: 10px 0;
+  border: 1px solid #d7d9db;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 14px 34px rgba(31, 36, 40, 0.16);
+}
+
+.change-card.active {
+  border-color: #8abbb4;
+  box-shadow: 0 18px 46px rgba(13, 107, 95, 0.2);
+}
+
+.change-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 58px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #ece8df;
+}
+
+.change-count {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 134px;
+  color: var(--muted);
+  font-weight: 750;
+}
+
+.change-count strong {
+  color: var(--ink);
+}
+
+.change-nav {
+  display: flex;
+  gap: 10px;
+}
+
+.change-nav .button {
+  min-height: 40px;
+  background: #f3f6f6;
+}
+
+.explain-button {
+  margin-left: auto;
+  border-color: #7357d4;
+  background: #7357d4;
+  color: #fff;
+}
+
+.change-card-body {
+  padding: 14px 8px 0;
+}
+
+.change-side {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  min-height: 74px;
+  border-radius: 6px;
+  font-family: "Cascadia Mono", "Consolas", monospace;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.change-side.left {
+  background: var(--delete-bg);
+  color: var(--delete-ink);
+}
+
+.change-side.right {
+  background: #d9f5ef;
+  color: #0d5048;
+}
+
+.change-side .review-no {
+  padding-top: 7px;
+}
+
+.change-side .review-text {
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+
+.change-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px minmax(0, 1fr);
+  gap: 16px;
+  align-items: center;
+  padding: 14px 50px 12px;
+}
+
+.merge-change {
+  justify-self: end;
+  min-height: 40px;
+  min-width: 164px;
+  border: 0;
+  border-radius: 7px;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 850;
+}
+
+.merge-change.left {
+  background: var(--delete-strong);
+}
+
+.merge-change.right {
+  justify-self: start;
+  background: var(--insert-strong);
+}
+
+.dismiss-change {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #8c9294;
+  cursor: pointer;
+  font-size: 28px;
+  line-height: 1;
+}
+
+.change-explanation {
+  display: none;
+  margin: 0 14px 14px;
+  padding: 10px 12px;
+  border-left: 3px solid #7357d4;
+  background: #f4f0ff;
+  color: #554a7a;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.change-card.explaining .change-explanation {
+  display: block;
 }
 
 .diff-shell {
@@ -526,7 +717,9 @@ pre {
 
   .editor-grid,
   .diff-header,
-  .diff-row {
+  .diff-row,
+  .review-line,
+  .change-card-body {
     grid-template-columns: 1fr;
   }
 
@@ -548,5 +741,42 @@ pre {
   .stats {
     width: 100%;
     margin-left: 0;
+  }
+
+  .review-scroll {
+    max-height: 78vh;
+  }
+
+  .change-card-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .change-nav {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .explain-button {
+    margin-left: 0;
+  }
+
+  .change-card-body {
+    gap: 8px;
+  }
+
+  .change-actions {
+    grid-template-columns: 1fr;
+    padding: 12px;
+  }
+
+  .merge-change,
+  .merge-change.left,
+  .merge-change.right {
+    justify-self: stretch;
+  }
+
+  .dismiss-change {
+    justify-self: center;
   }
 }
