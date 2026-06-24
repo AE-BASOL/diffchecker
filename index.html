@@ -45,12 +45,15 @@
           <input id="showOnlyChanges" type="checkbox">
           <span>Only changes</span>
         </label>
+        <button class="button ghost" id="mergeAllLeftButton" type="button">Merge all left</button>
+        <button class="button ghost" id="mergeAllRightButton" type="button">Merge all right</button>
         <div class="stats" id="stats" aria-live="polite"></div>
       </section>
 
       <section class="diff-shell" aria-label="Side by side diff">
         <div class="diff-header">
           <div>Original</div>
+          <div class="merge-title">Merge</div>
           <div>Modified</div>
         </div>
         <div class="diff-table" id="diffTable"></div>
@@ -63,6 +66,8 @@
         </div>
         <pre id="patchOutput" tabindex="0"></pre>
       </section>
+
+      <div class="line-popover" id="linePopover" role="menu" aria-hidden="true"></div>
     </main>
 
     <script src="app.js"></script>

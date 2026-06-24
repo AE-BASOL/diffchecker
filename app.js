@@ -6,6 +6,8 @@ const patchOutput = document.querySelector("#patchOutput");
 const ignoreWhitespace = document.querySelector("#ignoreWhitespace");
 const ignoreCase = document.querySelector("#ignoreCase");
 const showOnlyChanges = document.querySelector("#showOnlyChanges");
+const linePopover = document.querySelector("#linePopover");
+let currentRows = [];
 
 const sampleOriginal = `Invoice #4102
 Customer: Atlas Market
@@ -63,18 +65,50 @@ function lineDiff(leftLines, rightLines) {
 
   while (i < leftLines.length || j < rightLines.length) {
     if (i < leftLines.length && j < rightLines.length && normalize(leftLines[i]) === normalize(rightLines[j])) {
-      rows.push({ type: "equal", left: leftLines[i], right: rightLines[j], leftNo: i + 1, rightNo: j + 1 });
+      rows.push({
+        type: "equal",
+        left: leftLines[i],
+        right: rightLines[j],
+        leftNo: i + 1,
+        rightNo: j + 1,
+        leftIndex: i,
+        rightIndex: j
+      });
       i += 1;
       j += 1;
     } else if (i < leftLines.length && j < rightLines.length && matrix[i + 1][j] === matrix[i][j + 1]) {
-      rows.push({ type: "change", left: leftLines[i], right: rightLines[j], leftNo: i + 1, rightNo: j + 1 });
+      rows.push({
+        type: "change",
+        left: leftLines[i],
+        right: rightLines[j],
+        leftNo: i + 1,
+        rightNo: j + 1,
+        leftIndex: i,
+        rightIndex: j
+      });
       i += 1;
       j += 1;
     } else if (j < rightLines.length && (i === leftLines.length || matrix[i][j + 1] >= matrix[i + 1][j])) {
-      rows.push({ type: "insert", left: "", right: rightLines[j], leftNo: "", rightNo: j + 1 });
+      rows.push({
+        type: "insert",
+        left: "",
+        right: rightLines[j],
+        leftNo: "",
+        rightNo: j + 1,
+        leftIndex: i,
+        rightIndex: j
+      });
       j += 1;
     } else {
-      rows.push({ type: "delete", left: leftLines[i], right: "", leftNo: i + 1, rightNo: "" });
+      rows.push({
+        type: "delete",
+        left: leftLines[i],
+        right: "",
+        leftNo: i + 1,
+        rightNo: "",
+        leftIndex: i,
+        rightIndex: j
+      });
       i += 1;
     }
   }
@@ -93,7 +127,9 @@ function pairDeleteInsertRows(rows) {
         left: current.left,
         right: next.right,
         leftNo: current.leftNo,
-        rightNo: next.rightNo
+        rightNo: next.rightNo,
+        leftIndex: current.leftIndex,
+        rightIndex: next.rightIndex
       });
       index += 1;
     } else {
@@ -146,14 +182,16 @@ function renderParts(parts) {
   }).join("");
 }
 
-function renderCell(lineNo, text, type, side) {
+function renderCell(row, side, text, type) {
+  const lineNo = side === "left" ? row.leftNo : row.rightNo;
   const empty = lineNo === "" ? " empty" : "";
+  const interactive = row.type === "equal" ? "" : ` data-row-id="${row.id}" data-side="${side}"`;
   let content = escapeHtml(text);
   if (type === "change") {
     const parts = side === "left" ? tokenDiff(text, "").leftParts : tokenDiff("", text).rightParts;
     content = renderParts(parts);
   }
-  return `<div class="diff-cell ${type}${empty}">
+  return `<div class="diff-cell ${type}${empty}"${interactive}>
     <div class="line-no">${lineNo}</div>
     <div class="line-text">${content || "&nbsp;"}</div>
   </div>`;
@@ -162,14 +200,28 @@ function renderCell(lineNo, text, type, side) {
 function renderChangeRow(row) {
   const parts = tokenDiff(row.left, row.right);
   return `<div class="diff-row">
-    <div class="diff-cell change">
+    <div class="diff-cell change" data-row-id="${row.id}" data-side="left">
       <div class="line-no">${row.leftNo}</div>
       <div class="line-text">${renderParts(parts.leftParts) || "&nbsp;"}</div>
     </div>
-    <div class="diff-cell change">
+    ${renderMergeControls(row)}
+    <div class="diff-cell change" data-row-id="${row.id}" data-side="right">
       <div class="line-no">${row.rightNo}</div>
       <div class="line-text">${renderParts(parts.rightParts) || "&nbsp;"}</div>
     </div>
+  </div>`;
+}
+
+function renderMergeControls(row) {
+  if (row.type === "equal") {
+    return `<div class="merge-controls" aria-hidden="true">
+      <button class="merge-button" type="button" disabled>&larr;</button>
+      <button class="merge-button" type="button" disabled>&rarr;</button>
+    </div>`;
+  }
+  return `<div class="merge-controls">
+    <button class="merge-button" type="button" data-merge="left" data-row-id="${row.id}" title="Merge modified into original" aria-label="Merge modified into original">&larr;</button>
+    <button class="merge-button" type="button" data-merge="right" data-row-id="${row.id}" title="Merge original into modified" aria-label="Merge original into modified">&rarr;</button>
   </div>`;
 }
 
@@ -183,8 +235,9 @@ function renderRows(rows) {
   diffTable.innerHTML = visibleRows.map((row) => {
     if (row.type === "change") return renderChangeRow(row);
     return `<div class="diff-row">
-      ${renderCell(row.leftNo, row.left, row.type === "delete" ? "delete" : "equal", "left")}
-      ${renderCell(row.rightNo, row.right, row.type === "insert" ? "insert" : "equal", "right")}
+      ${renderCell(row, "left", row.left, row.type === "delete" ? "delete" : "equal")}
+      ${renderMergeControls(row)}
+      ${renderCell(row, "right", row.right, row.type === "insert" ? "insert" : "equal")}
     </div>`;
   }).join("");
 }
@@ -207,7 +260,9 @@ function createPatch(rows) {
 }
 
 function compare() {
-  const rows = lineDiff(splitLines(originalInput.value), splitLines(modifiedInput.value));
+  const rows = lineDiff(splitLines(originalInput.value), splitLines(modifiedInput.value))
+    .map((row, id) => ({ ...row, id }));
+  currentRows = rows;
   const counts = rows.reduce((acc, row) => {
     acc[row.type] += 1;
     return acc;
@@ -218,7 +273,128 @@ function compare() {
   stats.textContent = `${counts.insert} added, ${counts.delete} deleted, ${counts.change} changed, ${counts.equal} unchanged`;
 }
 
+function joinLines(lines) {
+  return lines.join("\n");
+}
+
+function mergeRow(rowId, target) {
+  const row = currentRows.find((item) => item.id === rowId);
+  if (!row || row.type === "equal") return;
+
+  const leftLines = splitLines(originalInput.value);
+  const rightLines = splitLines(modifiedInput.value);
+
+  if (target === "left") {
+    if (row.type === "change") leftLines[row.leftIndex] = row.right;
+    if (row.type === "insert") leftLines.splice(row.leftIndex, 0, row.right);
+    if (row.type === "delete") leftLines.splice(row.leftIndex, 1);
+    originalInput.value = joinLines(leftLines);
+  }
+
+  if (target === "right") {
+    if (row.type === "change") rightLines[row.rightIndex] = row.left;
+    if (row.type === "delete") rightLines.splice(row.rightIndex, 0, row.left);
+    if (row.type === "insert") rightLines.splice(row.rightIndex, 1);
+    modifiedInput.value = joinLines(rightLines);
+  }
+
+  compare();
+}
+
+function mergeAll(target) {
+  if (target === "left") originalInput.value = modifiedInput.value;
+  if (target === "right") modifiedInput.value = originalInput.value;
+  compare();
+}
+
+function deleteLine(rowId, side) {
+  const row = currentRows.find((item) => item.id === rowId);
+  if (!row) return;
+
+  const leftLines = splitLines(originalInput.value);
+  const rightLines = splitLines(modifiedInput.value);
+
+  if (side === "left" && row.leftNo !== "") {
+    leftLines.splice(row.leftIndex, 1);
+    originalInput.value = joinLines(leftLines);
+  }
+
+  if (side === "right" && row.rightNo !== "") {
+    rightLines.splice(row.rightIndex, 1);
+    modifiedInput.value = joinLines(rightLines);
+  }
+
+  hidePopover();
+  compare();
+}
+
+function hidePopover() {
+  linePopover.classList.remove("open");
+  linePopover.setAttribute("aria-hidden", "true");
+  linePopover.innerHTML = "";
+}
+
+function showPopover(cell) {
+  const rowId = Number(cell.dataset.rowId);
+  const side = cell.dataset.side;
+  const row = currentRows.find((item) => item.id === rowId);
+  if (!row || row.type === "equal") return;
+
+  const rect = cell.getBoundingClientRect();
+  const mergeIntoThis = side === "left" ? "Merge modified here" : "Merge original here";
+  const mergeOtherWay = side === "left" ? "Merge original to modified" : "Merge modified to original";
+  const targetThis = side;
+  const targetOther = side === "left" ? "right" : "left";
+  const canDelete = side === "left" ? row.leftNo !== "" : row.rightNo !== "";
+
+  linePopover.innerHTML = `
+    <button class="popover-button" type="button" data-action="merge" data-target="${targetThis}" data-row-id="${rowId}">${mergeIntoThis}</button>
+    <button class="popover-button" type="button" data-action="merge" data-target="${targetOther}" data-row-id="${rowId}">${mergeOtherWay}</button>
+    <button class="popover-button danger" type="button" data-action="delete" data-side="${side}" data-row-id="${rowId}" ${canDelete ? "" : "disabled"}>Delete line</button>
+  `;
+
+  const left = Math.min(rect.left + 18, window.innerWidth - 220);
+  const top = Math.min(rect.top + 28, window.innerHeight - 150);
+  linePopover.style.left = `${Math.max(10, left)}px`;
+  linePopover.style.top = `${Math.max(10, top)}px`;
+  linePopover.classList.add("open");
+  linePopover.setAttribute("aria-hidden", "false");
+}
+
 document.querySelector("#compareButton").addEventListener("click", compare);
+document.querySelector("#mergeAllLeftButton").addEventListener("click", () => mergeAll("left"));
+document.querySelector("#mergeAllRightButton").addEventListener("click", () => mergeAll("right"));
+diffTable.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-merge]");
+  if (button) {
+    hidePopover();
+    mergeRow(Number(button.dataset.rowId), button.dataset.merge);
+    return;
+  }
+
+  const cell = event.target.closest(".diff-cell[data-row-id]");
+  if (cell) {
+    showPopover(cell);
+    return;
+  }
+
+  hidePopover();
+});
+linePopover.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-action]");
+  if (!button || button.disabled) return;
+  if (button.dataset.action === "merge") mergeRow(Number(button.dataset.rowId), button.dataset.target);
+  if (button.dataset.action === "delete") deleteLine(Number(button.dataset.rowId), button.dataset.side);
+  hidePopover();
+});
+document.addEventListener("click", (event) => {
+  if (!linePopover.classList.contains("open")) return;
+  if (event.target.closest("#linePopover") || event.target.closest(".diff-cell[data-row-id]")) return;
+  hidePopover();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") hidePopover();
+});
 document.querySelector("#sampleButton").addEventListener("click", () => {
   originalInput.value = sampleOriginal;
   modifiedInput.value = sampleModified;

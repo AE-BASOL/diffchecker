@@ -120,7 +120,7 @@ h2 {
 
 .editor-panel {
   display: grid;
-  min-height: 300px;
+  min-height: 500px;
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -140,7 +140,7 @@ h2 {
 
 textarea {
   width: 100%;
-  min-height: 260px;
+  min-height: 458px;
   resize: vertical;
   border: 0;
   outline: 0;
@@ -195,7 +195,7 @@ textarea {
 .diff-header,
 .diff-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) 74px minmax(0, 1fr);
 }
 
 .diff-header {
@@ -212,7 +212,8 @@ textarea {
 }
 
 .diff-header > div + div,
-.diff-cell + .diff-cell {
+.merge-controls + .diff-cell,
+.diff-cell + .merge-controls {
   border-left: 1px solid var(--line);
 }
 
@@ -226,6 +227,50 @@ textarea {
   grid-template-columns: 58px minmax(0, 1fr);
   min-width: 0;
   background: #fff;
+}
+
+.diff-cell[data-row-id] {
+  cursor: pointer;
+}
+
+.diff-cell[data-row-id]:hover .line-text {
+  box-shadow: inset 0 0 0 999px rgba(13, 107, 95, 0.055);
+}
+
+.merge-title {
+  text-align: center;
+}
+
+.merge-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+  align-content: center;
+  justify-content: center;
+  padding: 5px;
+  background: #f7f4ed;
+}
+
+.merge-button {
+  min-width: 0;
+  min-height: 28px;
+  border: 1px solid #c9c1b4;
+  border-radius: 6px;
+  background: #fffefa;
+  color: var(--ink);
+  cursor: pointer;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.merge-button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.merge-button:disabled {
+  cursor: default;
+  opacity: 0.28;
 }
 
 .line-no {
@@ -315,6 +360,48 @@ pre {
   line-height: 1.5;
 }
 
+.line-popover {
+  position: fixed;
+  z-index: 10;
+  display: none;
+  min-width: 190px;
+  overflow: hidden;
+  border: 1px solid #bdb6aa;
+  border-radius: 8px;
+  background: #fffefa;
+  box-shadow: 0 18px 48px rgba(31, 36, 40, 0.22);
+}
+
+.line-popover.open {
+  display: grid;
+}
+
+.popover-button {
+  min-height: 38px;
+  border: 0;
+  border-bottom: 1px solid #ece8df;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  padding: 0 13px;
+  text-align: left;
+  font-weight: 800;
+}
+
+.popover-button:last-child {
+  border-bottom: 0;
+}
+
+.popover-button:hover {
+  background: #e9f3f0;
+  color: var(--accent);
+}
+
+.popover-button.danger:hover {
+  background: var(--delete-bg);
+  color: var(--delete-ink);
+}
+
 @media (max-width: 820px) {
   .app-shell {
     width: min(100% - 20px, 1560px);
@@ -341,11 +428,17 @@ pre {
     grid-template-columns: 1fr;
   }
 
-  .diff-header > div:last-child {
+  .diff-header > .merge-title {
     display: none;
   }
 
-  .diff-cell + .diff-cell {
+  .merge-controls {
+    grid-template-columns: repeat(2, minmax(0, 120px));
+    border-top: 1px solid var(--line);
+  }
+
+  .diff-cell + .merge-controls,
+  .merge-controls + .diff-cell {
     border-left: 0;
     border-top: 1px solid var(--line);
   }
