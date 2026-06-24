@@ -282,7 +282,7 @@ function renderHighlightLayer(layer, lines, rows, side) {
     const row = rowForHighlightLine(rows, side, index);
     const content = escapeHtml(line) || "&nbsp;";
     const rowAttr = row && row.type !== "equal" ? ` data-row-id="${row.id}"` : "";
-    return `<div class="highlight-line ${className}" data-line-index="${index}"${rowAttr}>${content}</div>`;
+    return `<span class="highlight-line ${className}" data-line-index="${index}"${rowAttr}>${content}</span>`;
   }).join("");
 }
 
