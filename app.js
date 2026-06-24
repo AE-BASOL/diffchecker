@@ -3,6 +3,9 @@ const modifiedInput = document.querySelector("#modifiedInput");
 const diffTable = document.querySelector("#diffTable");
 const stats = document.querySelector("#stats");
 const patchOutput = document.querySelector("#patchOutput");
+const originalHighlights = document.querySelector("#originalHighlights");
+const modifiedHighlights = document.querySelector("#modifiedHighlights");
+const editorResizeHandle = document.querySelector("#editorResizeHandle");
 const ignoreWhitespace = document.querySelector("#ignoreWhitespace");
 const ignoreCase = document.querySelector("#ignoreCase");
 const showOnlyChanges = document.querySelector("#showOnlyChanges");
@@ -226,20 +229,7 @@ function renderMergeControls(row) {
 }
 
 function renderRows(rows) {
-  const visibleRows = showOnlyChanges.checked ? rows.filter((row) => row.type !== "equal") : rows;
-  if (!visibleRows.length) {
-    diffTable.innerHTML = `<div class="empty-state">No differences found.</div>`;
-    return;
-  }
-
-  diffTable.innerHTML = visibleRows.map((row) => {
-    if (row.type === "change") return renderChangeRow(row);
-    return `<div class="diff-row">
-      ${renderCell(row, "left", row.left, row.type === "delete" ? "delete" : "equal")}
-      ${renderMergeControls(row)}
-      ${renderCell(row, "right", row.right, row.type === "insert" ? "insert" : "equal")}
-    </div>`;
-  }).join("");
+  renderEditorHighlights(rows);
 }
 
 function createPatch(rows) {
@@ -271,6 +261,28 @@ function compare() {
   renderRows(rows);
   patchOutput.textContent = createPatch(rows);
   stats.textContent = `${counts.insert} added, ${counts.delete} deleted, ${counts.change} changed, ${counts.equal} unchanged`;
+}
+
+function highlightClassForLine(rows, side, lineIndex) {
+  const row = rows.find((item) => side === "left" ? item.leftIndex === lineIndex && item.leftNo !== "" : item.rightIndex === lineIndex && item.rightNo !== "");
+  if (!row || row.type === "equal") return "";
+  if (row.type === "change") return side === "left" ? "delete" : "insert";
+  return row.type;
+}
+
+function renderHighlightLayer(layer, lines, rows, side) {
+  layer.innerHTML = lines.map((line, index) => {
+    const className = highlightClassForLine(rows, side, index);
+    const content = escapeHtml(line) || "&nbsp;";
+    return `<div class="highlight-line ${className}">${content}</div>`;
+  }).join("");
+}
+
+function renderEditorHighlights(rows) {
+  renderHighlightLayer(originalHighlights, splitLines(originalInput.value), rows, "left");
+  renderHighlightLayer(modifiedHighlights, splitLines(modifiedInput.value), rows, "right");
+  syncHighlightScroll(originalInput);
+  syncHighlightScroll(modifiedInput);
 }
 
 function joinLines(lines) {
@@ -361,25 +373,105 @@ function showPopover(cell) {
   linePopover.setAttribute("aria-hidden", "false");
 }
 
+function rowForEditorLine(side, lineIndex) {
+  return currentRows.find((row) => {
+    if (row.type === "equal") return false;
+    return side === "left"
+      ? row.leftIndex === lineIndex && row.leftNo !== ""
+      : row.rightIndex === lineIndex && row.rightNo !== "";
+  });
+}
+
+function lineIndexFromCaret(textarea) {
+  return textarea.value.slice(0, textarea.selectionStart).split("\n").length - 1;
+}
+
+function showEditorPopover(textarea, side, event) {
+  const row = rowForEditorLine(side, lineIndexFromCaret(textarea));
+  if (!row) {
+    hidePopover();
+    return;
+  }
+
+  const mergeIntoThis = side === "left" ? "Geçir: Modified -> Original" : "Geçir: Original -> Modified";
+  const mergeOtherWay = side === "left" ? "Original'ı Modified'a geçir" : "Modified'ı Original'a geçir";
+  const targetThis = side;
+  const targetOther = side === "left" ? "right" : "left";
+
+  linePopover.innerHTML = `
+    <button class="popover-button" type="button" data-action="merge" data-target="${targetThis}" data-row-id="${row.id}">${mergeIntoThis}</button>
+    <button class="popover-button" type="button" data-action="merge" data-target="${targetOther}" data-row-id="${row.id}">${mergeOtherWay}</button>
+    <button class="popover-button danger" type="button" data-action="delete" data-side="${side}" data-row-id="${row.id}">Delete line</button>
+  `;
+
+  const left = Math.min(event.clientX + 8, window.innerWidth - 230);
+  const top = Math.min(event.clientY + 8, window.innerHeight - 150);
+  linePopover.style.left = `${Math.max(10, left)}px`;
+  linePopover.style.top = `${Math.max(10, top)}px`;
+  linePopover.classList.add("open");
+  linePopover.setAttribute("aria-hidden", "false");
+}
+
+function syncHighlightScroll(textarea) {
+  const layer = textarea.id === "originalInput" ? originalHighlights : modifiedHighlights;
+  layer.scrollTop = textarea.scrollTop;
+  layer.scrollLeft = textarea.scrollLeft;
+}
+
+function setEditorHeight(height) {
+  const next = Math.max(260, Math.min(1400, Math.round(height)));
+  document.documentElement.style.setProperty("--editor-height", `${next}px`);
+  localStorage.setItem("diffcheckerEditorHeight", String(next));
+}
+
+function installEditorResize() {
+  const savedHeight = Number(localStorage.getItem("diffcheckerEditorHeight"));
+  if (savedHeight) setEditorHeight(savedHeight);
+
+  let startY = 0;
+  let startHeight = 0;
+
+  editorResizeHandle.addEventListener("pointerdown", (event) => {
+    startY = event.clientY;
+    startHeight = originalInput.getBoundingClientRect().height;
+    editorResizeHandle.setPointerCapture(event.pointerId);
+    document.body.classList.add("resizing-editors");
+  });
+
+  editorResizeHandle.addEventListener("pointermove", (event) => {
+    if (!editorResizeHandle.hasPointerCapture(event.pointerId)) return;
+    setEditorHeight(startHeight + event.clientY - startY);
+  });
+
+  editorResizeHandle.addEventListener("pointerup", (event) => {
+    if (editorResizeHandle.hasPointerCapture(event.pointerId)) {
+      editorResizeHandle.releasePointerCapture(event.pointerId);
+    }
+    document.body.classList.remove("resizing-editors");
+  });
+}
+
 document.querySelector("#compareButton").addEventListener("click", compare);
 document.querySelector("#mergeAllLeftButton").addEventListener("click", () => mergeAll("left"));
 document.querySelector("#mergeAllRightButton").addEventListener("click", () => mergeAll("right"));
-diffTable.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-merge]");
-  if (button) {
+if (diffTable) {
+  diffTable.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-merge]");
+    if (button) {
+      hidePopover();
+      mergeRow(Number(button.dataset.rowId), button.dataset.merge);
+      return;
+    }
+
+    const cell = event.target.closest(".diff-cell[data-row-id]");
+    if (cell) {
+      showPopover(cell);
+      return;
+    }
+
     hidePopover();
-    mergeRow(Number(button.dataset.rowId), button.dataset.merge);
-    return;
-  }
-
-  const cell = event.target.closest(".diff-cell[data-row-id]");
-  if (cell) {
-    showPopover(cell);
-    return;
-  }
-
-  hidePopover();
-});
+  });
+}
 linePopover.addEventListener("click", (event) => {
   const button = event.target.closest("[data-action]");
   if (!button || button.disabled) return;
@@ -389,7 +481,7 @@ linePopover.addEventListener("click", (event) => {
 });
 document.addEventListener("click", (event) => {
   if (!linePopover.classList.contains("open")) return;
-  if (event.target.closest("#linePopover") || event.target.closest(".diff-cell[data-row-id]")) return;
+  if (event.target.closest("#linePopover") || event.target.closest(".diff-cell[data-row-id]") || event.target.closest("textarea")) return;
   hidePopover();
 });
 document.addEventListener("keydown", (event) => {
@@ -416,6 +508,12 @@ document.querySelector("#copyPatchButton").addEventListener("click", async () =>
 
 [ignoreWhitespace, ignoreCase, showOnlyChanges].forEach((input) => input.addEventListener("change", compare));
 [originalInput, modifiedInput].forEach((input) => input.addEventListener("input", compare));
+[originalInput, modifiedInput].forEach((input) => {
+  input.addEventListener("scroll", () => syncHighlightScroll(input));
+});
+originalInput.addEventListener("click", (event) => showEditorPopover(originalInput, "left", event));
+modifiedInput.addEventListener("click", (event) => showEditorPopover(modifiedInput, "right", event));
+installEditorResize();
 
 originalInput.value = sampleOriginal;
 modifiedInput.value = sampleModified;

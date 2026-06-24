@@ -24,13 +24,20 @@
       <section class="editor-grid" aria-label="Text inputs">
         <label class="editor-panel">
           <span class="panel-label">Original</span>
-          <textarea id="originalInput" spellcheck="false" placeholder="Paste original text here"></textarea>
+          <div class="editor-stack">
+            <div class="highlight-layer" id="originalHighlights" aria-hidden="true"></div>
+            <textarea id="originalInput" spellcheck="false" placeholder="Paste original text here"></textarea>
+          </div>
         </label>
         <label class="editor-panel">
           <span class="panel-label">Modified</span>
-          <textarea id="modifiedInput" spellcheck="false" placeholder="Paste changed text here"></textarea>
+          <div class="editor-stack">
+            <div class="highlight-layer" id="modifiedHighlights" aria-hidden="true"></div>
+            <textarea id="modifiedInput" spellcheck="false" placeholder="Paste changed text here"></textarea>
+          </div>
         </label>
       </section>
+      <button class="resize-handle" id="editorResizeHandle" type="button" aria-label="Resize both editors"></button>
 
       <section class="toolbar" aria-label="Comparison settings">
         <label class="toggle">
@@ -48,15 +55,6 @@
         <button class="button ghost" id="mergeAllLeftButton" type="button">Merge all left</button>
         <button class="button ghost" id="mergeAllRightButton" type="button">Merge all right</button>
         <div class="stats" id="stats" aria-live="polite"></div>
-      </section>
-
-      <section class="diff-shell" aria-label="Side by side diff">
-        <div class="diff-header">
-          <div>Original</div>
-          <div class="merge-title">Merge</div>
-          <div>Modified</div>
-        </div>
-        <div class="diff-table" id="diffTable"></div>
       </section>
 
       <section class="patch-section" aria-label="Unified diff">
