@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Diffchecker</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Text compare</p>
+          <h1>Diffchecker</h1>
+        </div>
+        <div class="actions" aria-label="Document actions">
+          <button class="button ghost" id="sampleButton" type="button">Sample</button>
+          <button class="button ghost" id="swapButton" type="button">Swap</button>
+          <button class="button ghost" id="clearButton" type="button">Clear</button>
+          <button class="button primary" id="compareButton" type="button">Compare</button>
+        </div>
+      </header>
+
+      <section class="editor-grid" aria-label="Text inputs">
+        <label class="editor-panel">
+          <span class="panel-label">Original</span>
+          <textarea id="originalInput" spellcheck="false" placeholder="Paste original text here"></textarea>
+        </label>
+        <label class="editor-panel">
+          <span class="panel-label">Modified</span>
+          <textarea id="modifiedInput" spellcheck="false" placeholder="Paste changed text here"></textarea>
+        </label>
+      </section>
+
+      <section class="toolbar" aria-label="Comparison settings">
+        <label class="toggle">
+          <input id="ignoreWhitespace" type="checkbox">
+          <span>Ignore whitespace</span>
+        </label>
+        <label class="toggle">
+          <input id="ignoreCase" type="checkbox">
+          <span>Ignore case</span>
+        </label>
+        <label class="toggle">
+          <input id="showOnlyChanges" type="checkbox">
+          <span>Only changes</span>
+        </label>
+        <div class="stats" id="stats" aria-live="polite"></div>
+      </section>
+
+      <section class="diff-shell" aria-label="Side by side diff">
+        <div class="diff-header">
+          <div>Original</div>
+          <div>Modified</div>
+        </div>
+        <div class="diff-table" id="diffTable"></div>
+      </section>
+
+      <section class="patch-section" aria-label="Unified diff">
+        <div class="section-title">
+          <h2>Unified Diff</h2>
+          <button class="button ghost" id="copyPatchButton" type="button">Copy</button>
+        </div>
+        <pre id="patchOutput" tabindex="0"></pre>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
