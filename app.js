@@ -1,7 +1,6 @@
 const originalInput = document.querySelector("#originalInput");
 const modifiedInput = document.querySelector("#modifiedInput");
 const diffTable = document.querySelector("#diffTable");
-const reviewScroll = document.querySelector("#reviewScroll");
 const stats = document.querySelector("#stats");
 const patchOutput = document.querySelector("#patchOutput");
 const originalHighlights = document.querySelector("#originalHighlights");
@@ -13,7 +12,6 @@ const showOnlyChanges = document.querySelector("#showOnlyChanges");
 const linePopover = document.querySelector("#linePopover");
 let currentRows = [];
 let manualEditorHeight = 0;
-let activeChangeIndex = 0;
 
 const sampleOriginal = `Invoice #4102
 Customer: Atlas Market
@@ -233,7 +231,6 @@ function renderMergeControls(row) {
 
 function renderRows(rows) {
   renderEditorHighlights(rows);
-  renderReview(rows);
 }
 
 function createPatch(rows) {
@@ -296,74 +293,6 @@ function renderEditorHighlights(rows) {
   syncHighlightScroll(modifiedInput);
 }
 
-function changeRows(rows) {
-  return rows.filter((row) => row.type !== "equal");
-}
-
-function renderReviewCell(lineNo, text) {
-  return `<div class="review-cell">
-    <div class="review-no">${lineNo || ""}</div>
-    <div class="review-text">${escapeHtml(text) || "&nbsp;"}</div>
-  </div>`;
-}
-
-function renderReviewLine(row) {
-  return `<div class="review-line">
-    ${renderReviewCell(row.leftNo, row.left)}
-    ${renderReviewCell(row.rightNo, row.right)}
-  </div>`;
-}
-
-function explainText(row) {
-  if (row.type === "insert") return "This line exists only in Modified. Use the green merge action to remove it from Modified, or the red action to bring it into Original.";
-  if (row.type === "delete") return "This line exists only in Original. Use the red merge action to remove it from Original, or the green action to bring it into Modified.";
-  return "Both sides changed on this line. Choose which side should become the source of truth.";
-}
-
-function renderChangeCard(row, changeIndex, totalChanges) {
-  const isActive = changeIndex === activeChangeIndex ? " active" : "";
-  const previousDisabled = changeIndex === 0 ? " disabled" : "";
-  const nextDisabled = changeIndex === totalChanges - 1 ? " disabled" : "";
-  return `<article class="change-card${isActive}" data-change-index="${changeIndex}" data-row-id="${row.id}">
-    <header class="change-card-header">
-      <div class="change-count"><strong>Change</strong><span>${changeIndex + 1} of ${totalChanges}</span></div>
-      <nav class="change-nav" aria-label="Change navigation">
-        <button class="button ghost" type="button" data-review-nav="previous"${previousDisabled}>Previous change</button>
-        <button class="button ghost" type="button" data-review-nav="next"${nextDisabled}>Next change</button>
-      </nav>
-      <button class="button explain-button" type="button" data-review-action="explain">Explain</button>
-    </header>
-    <div class="change-card-body">
-      <div class="change-side left">
-        <div class="review-no">${row.leftNo || ""}</div>
-        <div class="review-text">${escapeHtml(row.left) || "&nbsp;"}</div>
-      </div>
-      <div class="change-side right">
-        <div class="review-no">${row.rightNo || ""}</div>
-        <div class="review-text">${escapeHtml(row.right) || "&nbsp;"}</div>
-      </div>
-    </div>
-    <div class="change-actions">
-      <button class="merge-change left" type="button" data-review-action="merge-left" data-row-id="${row.id}">Merge change ›</button>
-      <button class="dismiss-change" type="button" data-review-action="dismiss" aria-label="Skip this change">×</button>
-      <button class="merge-change right" type="button" data-review-action="merge-right" data-row-id="${row.id}">‹ Merge change</button>
-    </div>
-    <p class="change-explanation">${explainText(row)}</p>
-  </article>`;
-}
-
-function renderReview(rows) {
-  const changes = changeRows(rows);
-  if (activeChangeIndex >= changes.length) activeChangeIndex = Math.max(0, changes.length - 1);
-  let changeIndex = 0;
-  reviewScroll.innerHTML = rows.map((row) => {
-    if (row.type === "equal") return renderReviewLine(row);
-    const html = renderChangeCard(row, changeIndex, changes.length);
-    changeIndex += 1;
-    return html;
-  }).join("");
-}
-
 function joinLines(lines) {
   return lines.join("\n");
 }
@@ -390,7 +319,6 @@ function mergeRow(rowId, target) {
   }
 
   compare();
-  scrollToActiveChange();
 }
 
 function mergeAll(target) {
@@ -418,7 +346,13 @@ function deleteLine(rowId, side) {
 
   hidePopover();
   compare();
-  scrollToActiveChange();
+}
+
+async function copyRowText(rowId, side) {
+  const row = currentRows.find((item) => item.id === rowId);
+  if (!row) return;
+  const text = side === "left" ? row.left : row.right;
+  await navigator.clipboard.writeText(text);
 }
 
 function hidePopover() {
@@ -468,10 +402,6 @@ function rowForEditorLine(side, lineIndex) {
   });
 }
 
-function lineIndexFromCaret(textarea) {
-  return textarea.value.slice(0, textarea.selectionStart).split("\n").length - 1;
-}
-
 function showEditorPopover(textarea, side, event) {
   const row = rowForEditorLine(side, lineIndexFromPointer(textarea, event));
   if (!row) {
@@ -491,6 +421,7 @@ function showEditorPopover(textarea, side, event) {
     </div>
     <button class="popover-button" type="button" data-action="merge" data-target="${targetThis}" data-row-id="${row.id}">${mergeIntoThis}</button>
     <button class="popover-button" type="button" data-action="merge" data-target="${targetOther}" data-row-id="${row.id}">${mergeOtherWay}</button>
+    <button class="popover-button" type="button" data-action="copy" data-side="${side}" data-row-id="${row.id}">Copy line</button>
     <button class="popover-button danger" type="button" data-action="delete" data-side="${side}" data-row-id="${row.id}">Delete line</button>
   `;
 
@@ -568,8 +499,6 @@ function clearHoveredHighlights() {
 function markHoveredRow(rowId) {
   clearHoveredHighlights();
   document.querySelectorAll(`.highlight-line[data-row-id="${rowId}"]`).forEach((line) => line.classList.add("hovered"));
-  document.querySelectorAll(".change-card.active").forEach((card) => card.classList.remove("active"));
-  document.querySelector(`.change-card[data-row-id="${rowId}"]`)?.classList.add("active");
 }
 
 function handleEditorHover(textarea, side, event) {
@@ -579,21 +508,6 @@ function handleEditorHover(textarea, side, event) {
     return;
   }
   markHoveredRow(row.id);
-}
-
-function scrollToActiveChange() {
-  requestAnimationFrame(() => {
-    const card = reviewScroll.querySelector(`.change-card[data-change-index="${activeChangeIndex}"]`);
-    card?.scrollIntoView({ block: "center", behavior: "smooth" });
-  });
-}
-
-function moveActiveChange(direction) {
-  const totalChanges = changeRows(currentRows).length;
-  if (!totalChanges) return;
-  activeChangeIndex = Math.max(0, Math.min(totalChanges - 1, activeChangeIndex + direction));
-  renderReview(currentRows);
-  scrollToActiveChange();
 }
 
 document.querySelector("#compareButton").addEventListener("click", compare);
@@ -617,31 +531,12 @@ if (diffTable) {
     hidePopover();
   });
 }
-reviewScroll.addEventListener("click", (event) => {
-  const card = event.target.closest(".change-card");
-  if (card) {
-    activeChangeIndex = Number(card.dataset.changeIndex);
-  }
-
-  const nav = event.target.closest("[data-review-nav]");
-  if (nav) {
-    moveActiveChange(nav.dataset.reviewNav === "next" ? 1 : -1);
-    return;
-  }
-
-  const action = event.target.closest("[data-review-action]");
-  if (!action) return;
-
-  if (action.dataset.reviewAction === "merge-left") mergeRow(Number(action.dataset.rowId), "left");
-  if (action.dataset.reviewAction === "merge-right") mergeRow(Number(action.dataset.rowId), "right");
-  if (action.dataset.reviewAction === "dismiss") moveActiveChange(1);
-  if (action.dataset.reviewAction === "explain") card?.classList.toggle("explaining");
-});
 linePopover.addEventListener("click", (event) => {
   const button = event.target.closest("[data-action]");
   if (!button || button.disabled) return;
   if (button.dataset.action === "merge") mergeRow(Number(button.dataset.rowId), button.dataset.target);
   if (button.dataset.action === "delete") deleteLine(Number(button.dataset.rowId), button.dataset.side);
+  if (button.dataset.action === "copy") copyRowText(Number(button.dataset.rowId), button.dataset.side);
   hidePopover();
 });
 document.addEventListener("click", (event) => {
