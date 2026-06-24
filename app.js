@@ -378,17 +378,8 @@ function explainText(row) {
   return "Both sides changed on this line. Pick the side that should become the source of truth.";
 }
 
-function rowForEditorLine(side, lineIndex) {
-  return currentRows.find((row) => {
-    if (row.type === "equal") return false;
-    return side === "left"
-      ? row.leftIndex === lineIndex && row.leftNo !== ""
-      : row.rightIndex === lineIndex && row.rightNo !== "";
-  });
-}
-
 function showEditorPopover(textarea, side, event) {
-  const row = rowForEditorLine(side, lineIndexFromPointer(textarea, event));
+  const row = rowForEditorPoint(side, event);
   if (!row) {
     hidePopover();
     return;
@@ -417,18 +408,24 @@ function showChangePopover(row, side, clientX, clientY) {
     </header>
     <div class="change-popover-body">
       <div class="change-preview left">
-        <div class="change-line-no">${row.leftNo || ""}</div>
-        <div class="change-line-text">${escapeHtml(row.left) || "&nbsp;"}</div>
+        <div class="change-side-label">Original</div>
+        <div class="change-line">
+          <div class="change-line-no">${row.leftNo || ""}</div>
+          <div class="change-line-text">${escapeHtml(row.left) || "&nbsp;"}</div>
+        </div>
       </div>
       <div class="change-preview right">
-        <div class="change-line-no">${row.rightNo || ""}</div>
-        <div class="change-line-text">${escapeHtml(row.right) || "&nbsp;"}</div>
+        <div class="change-side-label">Modified</div>
+        <div class="change-line">
+          <div class="change-line-no">${row.rightNo || ""}</div>
+          <div class="change-line-text">${escapeHtml(row.right) || "&nbsp;"}</div>
+        </div>
       </div>
     </div>
     <div class="change-popover-actions">
-      <button class="merge-popover left" type="button" data-action="merge" data-target="right" data-row-id="${row.id}">Merge change ›</button>
+      <button class="merge-popover left" type="button" data-action="merge" data-target="right" data-row-id="${row.id}">Use Original ›</button>
       <button class="close-popover" type="button" data-action="close" aria-label="Close">×</button>
-      <button class="merge-popover right" type="button" data-action="merge" data-target="left" data-row-id="${row.id}">‹ Merge change</button>
+      <button class="merge-popover right" type="button" data-action="merge" data-target="left" data-row-id="${row.id}">‹ Use Modified</button>
     </div>
     <div class="change-popover-footer">
       <button class="text-action" type="button" data-action="copy" data-side="left" data-row-id="${row.id}">Copy original</button>
@@ -504,13 +501,18 @@ function installEditorResize() {
   });
 }
 
-function lineIndexFromPointer(textarea, event) {
-  const rect = textarea.getBoundingClientRect();
-  const style = window.getComputedStyle(textarea);
-  const lineHeight = Number.parseFloat(style.lineHeight);
-  const paddingTop = Number.parseFloat(style.paddingTop);
-  const y = event.clientY - rect.top + textarea.scrollTop - paddingTop;
-  return Math.max(0, Math.floor(y / lineHeight));
+function rowForEditorPoint(side, event) {
+  const layer = side === "left" ? originalHighlights : modifiedHighlights;
+  const candidates = Array.from(layer.querySelectorAll(".highlight-line[data-row-id]"));
+  const hit = candidates.find((line) => {
+    return Array.from(line.getClientRects()).some((rect) => {
+      const withinY = event.clientY >= rect.top - 3 && event.clientY <= rect.bottom + 3;
+      const withinX = event.clientX >= rect.left - 6 && event.clientX <= rect.right + 6;
+      return withinY && withinX;
+    });
+  });
+  if (!hit) return null;
+  return currentRows.find((row) => row.id === Number(hit.dataset.rowId)) || null;
 }
 
 function clearHoveredHighlights() {
@@ -523,7 +525,7 @@ function markHoveredRow(rowId) {
 }
 
 function handleEditorHover(textarea, side, event) {
-  const row = rowForEditorLine(side, lineIndexFromPointer(textarea, event));
+  const row = rowForEditorPoint(side, event);
   if (!row) {
     clearHoveredHighlights();
     return;

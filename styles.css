@@ -518,13 +518,12 @@ pre {
 }
 
 .change-preview {
-  display: grid;
-  grid-template-columns: 84px minmax(0, 1fr);
   min-height: 78px;
   border-radius: 6px;
   font-family: "Cascadia Mono", "Consolas", monospace;
   font-size: 13px;
   line-height: 1.55;
+  overflow: hidden;
 }
 
 .change-preview.left {
@@ -535,6 +534,21 @@ pre {
 .change-preview.right {
   background: #d9f5ef;
   color: #0d5048;
+}
+
+.change-side-label {
+  min-height: 32px;
+  padding: 7px 12px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  font-family: "Aptos", "Segoe UI", sans-serif;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.change-line {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
 }
 
 .change-line-no {
@@ -574,9 +588,23 @@ pre {
   background: var(--delete-strong);
 }
 
+.merge-popover.left::after {
+  content: "  Original -> Modified";
+  font-size: 12px;
+  font-weight: 750;
+  opacity: 0.86;
+}
+
 .merge-popover.right {
   justify-self: start;
   background: var(--insert-strong);
+}
+
+.merge-popover.right::after {
+  content: "  Modified -> Original";
+  font-size: 12px;
+  font-weight: 750;
+  opacity: 0.86;
 }
 
 .close-popover {
