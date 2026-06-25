@@ -267,7 +267,7 @@ function renderMergeControls(row) {
 }
 
 function renderRows(rows) {
-  renderEditorHighlights(rows);
+  if (viewMode === "edit") renderEditorHighlights(rows);
   renderAlignedDiff(rows);
 }
 
@@ -305,9 +305,11 @@ function compare() {
 
 function showDiffView() {
   viewMode = "diff";
+  hidePopover();
   editorGrid.hidden = true;
   alignedDiffShell.hidden = false;
   editorResizeHandle.hidden = true;
+  renderAlignedDiff(currentRows);
 }
 
 function showEditView() {
@@ -608,6 +610,7 @@ function markHoveredRow(rowId) {
 }
 
 function handleEditorHover(textarea, side, event) {
+  if (viewMode !== "edit") return;
   const row = rowForEditorPoint(side, event);
   if (!row) {
     clearHoveredHighlights();
@@ -696,7 +699,11 @@ document.querySelector("#copyPatchButton").addEventListener("click", async () =>
   await navigator.clipboard.writeText(patchOutput.textContent);
 });
 
-[ignoreWhitespace, ignoreCase, showOnlyChanges].forEach((input) => input.addEventListener("change", compare));
+[ignoreWhitespace, ignoreCase].forEach((input) => input.addEventListener("change", () => {
+  compare();
+  if (viewMode === "diff") showDiffView();
+}));
+showOnlyChanges.addEventListener("change", () => renderAlignedDiff(currentRows));
 [originalInput, modifiedInput].forEach((input) => input.addEventListener("input", compare));
 [originalInput, modifiedInput].forEach((input) => {
   input.addEventListener("scroll", () => syncHighlightScroll(input));
