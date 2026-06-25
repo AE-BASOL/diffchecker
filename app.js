@@ -1,5 +1,7 @@
 const originalInput = document.querySelector("#originalInput");
 const modifiedInput = document.querySelector("#modifiedInput");
+const editorGrid = document.querySelector("#editorGrid");
+const alignedDiffShell = document.querySelector("#alignedDiffShell");
 const alignedDiff = document.querySelector("#alignedDiff");
 const stats = document.querySelector("#stats");
 const patchOutput = document.querySelector("#patchOutput");
@@ -13,6 +15,7 @@ const linePopover = document.querySelector("#linePopover");
 let currentRows = [];
 let manualEditorHeight = 0;
 let currentPopover = null;
+let viewMode = "edit";
 
 const sampleOriginal = `Invoice #4102
 Customer: Atlas Market
@@ -298,6 +301,22 @@ function compare() {
   renderRows(rows);
   patchOutput.textContent = createPatch(rows);
   stats.textContent = `${counts.insert} added, ${counts.delete} deleted, ${counts.change} changed, ${counts.equal} unchanged`;
+}
+
+function showDiffView() {
+  viewMode = "diff";
+  editorGrid.hidden = true;
+  alignedDiffShell.hidden = false;
+  editorResizeHandle.hidden = true;
+}
+
+function showEditView() {
+  viewMode = "edit";
+  editorGrid.hidden = false;
+  alignedDiffShell.hidden = true;
+  editorResizeHandle.hidden = false;
+  hidePopover();
+  autoFitEditors();
 }
 
 function highlightClassForLine(rows, side, lineIndex) {
@@ -597,7 +616,11 @@ function handleEditorHover(textarea, side, event) {
   markHoveredRow(row.id);
 }
 
-document.querySelector("#compareButton").addEventListener("click", compare);
+document.querySelector("#compareButton").addEventListener("click", () => {
+  compare();
+  showDiffView();
+});
+document.querySelector("#editButton").addEventListener("click", showEditView);
 document.querySelector("#mergeAllLeftButton").addEventListener("click", () => mergeAll("left"));
 document.querySelector("#mergeAllRightButton").addEventListener("click", () => mergeAll("right"));
 alignedDiff.addEventListener("mousemove", (event) => {
@@ -655,15 +678,18 @@ document.querySelector("#sampleButton").addEventListener("click", () => {
   originalInput.value = sampleOriginal;
   modifiedInput.value = sampleModified;
   compare();
+  showEditView();
 });
 document.querySelector("#swapButton").addEventListener("click", () => {
   [originalInput.value, modifiedInput.value] = [modifiedInput.value, originalInput.value];
   compare();
+  showEditView();
 });
 document.querySelector("#clearButton").addEventListener("click", () => {
   originalInput.value = "";
   modifiedInput.value = "";
   compare();
+  showEditView();
   originalInput.focus();
 });
 document.querySelector("#copyPatchButton").addEventListener("click", async () => {
@@ -690,3 +716,4 @@ installEditorResize();
 originalInput.value = sampleOriginal;
 modifiedInput.value = sampleModified;
 compare();
+showEditView();
