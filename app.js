@@ -800,12 +800,12 @@ document.querySelector("#sampleButton").addEventListener("click", () => {
   originalInput.value = sampleOriginal;
   modifiedInput.value = sampleModified;
   compare();
-  showEditView();
+  showDiffView();
 });
 document.querySelector("#swapButton").addEventListener("click", () => {
   [originalInput.value, modifiedInput.value] = [modifiedInput.value, originalInput.value];
   compare();
-  showEditView();
+  showDiffView();
 });
 document.querySelector("#clearButton").addEventListener("click", () => {
   originalInput.value = "";
@@ -842,4 +842,4 @@ installEditorResize();
 originalInput.value = sampleOriginal;
 modifiedInput.value = sampleModified;
 compare();
-showEditView();
+showDiffView();

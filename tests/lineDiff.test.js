@@ -71,21 +71,33 @@ function loadApp() {
     removeEventListener: () => {}
   };
   const source = fs.readFileSync(path.join(__dirname, "..", "app.js"), "utf8");
+  const sample = {
+    original: fs.readFileSync(path.join(__dirname, "..", "fixtures", "original_latex_ubmk26.txt"), "utf8"),
+    modified: fs.readFileSync(path.join(__dirname, "..", "fixtures", "modified_latex_ubmk26.txt"), "utf8")
+  };
   const sandbox = {
     console,
     document,
     navigator: { clipboard: { writeText: async () => {} } },
-    window: { addEventListener: () => {}, removeEventListener: () => {} },
+    window: { addEventListener: () => {}, removeEventListener: () => {}, ubmk26Sample: sample },
     setTimeout,
     clearTimeout
   };
-  vm.runInNewContext(`${source}\nglobalThis.__api = { lineDiff, splitLines };`, sandbox, {
+  vm.runInNewContext(`${source}
+globalThis.__api = {
+  lineDiff,
+  splitLines,
+  getViewMode: () => viewMode,
+  getRows: () => currentRows,
+  getElement: (selector) => document.querySelector(selector)
+};`, sandbox, {
     filename: "app.js"
   });
   return sandbox.__api;
 }
 
-const { lineDiff, splitLines } = loadApp();
+const app = loadApp();
+const { lineDiff, splitLines } = app;
 
 function rowsFor(left, right) {
   return lineDiff(splitLines(left), splitLines(right));
@@ -121,6 +133,16 @@ function largestBlankRun(rows, blankSide) {
     }
     return state;
   }, { current: 0, currentStart: -1, max: 0, start: -1 });
+}
+
+{
+  assert.equal(app.getViewMode(), "diff", "the app should open directly in side-by-side diff view");
+  assert.equal(app.getElement("#editorGrid").hidden, true, "editor textareas should be hidden on startup");
+  assert.equal(app.getElement("#alignedDiffShell").hidden, false, "aligned diff should be visible on startup");
+  assert.ok(app.getElement("#originalInput").value.includes("\\documentclass[conference,a4paper]{IEEEtran}"));
+  assert.ok(app.getElement("#modifiedInput").value.includes("UBMK 2026"));
+  assert.ok(app.getElement("#alignedDiff").innerHTML.includes("aligned-row"), "startup diff should render line rows");
+  assert.ok(app.getRows().length > 600, "startup UBMK fixture should produce full-document line rows");
 }
 
 {
@@ -226,6 +248,8 @@ function largestBlankRun(rows, blankSide) {
 
   const emptyLeftRun = largestBlankRun(rows, "left");
   const largestEmptyLeftRun = Math.max(emptyLeftRun.max, emptyLeftRun.current);
+  const emptyRightRun = largestBlankRun(rows, "right");
+  const largestEmptyRightRun = Math.max(emptyRightRun.max, emptyRightRun.current);
   const emptyLeftPreview = rows
     .slice(Math.max(0, emptyLeftRun.start - 3), emptyLeftRun.start + Math.min(largestEmptyLeftRun, 6))
     .map((row, index) => {
@@ -245,6 +269,10 @@ function largestBlankRun(rows, blankSide) {
   assert.ok(
     largestEmptyLeftRun < 30,
     `fixture should not render a huge modified-only stack; largest run was ${largestEmptyLeftRun} near row ${emptyLeftRun.start}: ${emptyLeftPreview}; moved intro: ${movedIntroPreview}`
+  );
+  assert.ok(
+    largestEmptyRightRun < 30,
+    `fixture should not render a huge original-only stack; largest run was ${largestEmptyRightRun} near row ${emptyRightRun.start}`
   );
 }
 
