@@ -291,7 +291,7 @@ body.resizing-editors {
 .aligned-diff-header,
 .aligned-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) 74px minmax(0, 1fr);
   gap: 14px;
 }
 
@@ -311,6 +311,11 @@ body.resizing-editors {
 
 .aligned-diff-header > div + div {
   border-left: 1px solid var(--line);
+}
+
+.aligned-diff-header > div:nth-child(2) {
+  border: 0;
+  background: transparent;
 }
 
 .aligned-row {

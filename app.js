@@ -480,6 +480,7 @@ function renderAlignedDiff(rows) {
     const rightType = row.type === "insert" || row.type === "change" ? "insert" : row.type === "delete" ? "empty" : "equal";
     return `<div class="aligned-row" data-row-id="${row.id}">
       ${renderAlignedCell(row, "left", leftType)}
+      ${renderMergeControls(row)}
       ${renderAlignedCell(row, "right", rightType)}
     </div>`;
   }).join("");
@@ -757,6 +758,13 @@ alignedDiff.addEventListener("mouseleave", () => {
   if (!linePopover.classList.contains("open")) clearHoveredHighlights();
 });
 alignedDiff.addEventListener("click", (event) => {
+  const mergeButton = event.target.closest("[data-merge][data-row-id]");
+  if (mergeButton) {
+    mergeRow(Number(mergeButton.dataset.rowId), mergeButton.dataset.merge);
+    showDiffView();
+    return;
+  }
+
   const rowEl = event.target.closest(".aligned-row[data-row-id]");
   if (!rowEl) return;
   const row = currentRows.find((item) => item.id === Number(rowEl.dataset.rowId));
@@ -790,7 +798,12 @@ linePopover.addEventListener("click", (event) => {
 });
 document.addEventListener("click", (event) => {
   if (!linePopover.classList.contains("open")) return;
-  if (event.target.closest("#linePopover") || event.target.closest(".diff-cell[data-row-id]") || event.target.closest("textarea")) return;
+  if (
+    event.target.closest("#linePopover") ||
+    event.target.closest(".diff-cell[data-row-id]") ||
+    event.target.closest(".aligned-row[data-row-id]") ||
+    event.target.closest("textarea")
+  ) return;
   hidePopover();
 });
 document.addEventListener("keydown", (event) => {

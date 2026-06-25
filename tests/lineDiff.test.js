@@ -87,6 +87,8 @@ function loadApp() {
 globalThis.__api = {
   lineDiff,
   splitLines,
+  compare,
+  mergeRow,
   getViewMode: () => viewMode,
   getRows: () => currentRows,
   getElement: (selector) => document.querySelector(selector)
@@ -101,6 +103,12 @@ const { lineDiff, splitLines } = app;
 
 function rowsFor(left, right) {
   return lineDiff(splitLines(left), splitLines(right));
+}
+
+function setInputs(left, right) {
+  app.getElement("#originalInput").value = left;
+  app.getElement("#modifiedInput").value = right;
+  app.compare();
 }
 
 function rowTypes(rows) {
@@ -143,6 +151,16 @@ function largestBlankRun(rows, blankSide) {
   assert.ok(app.getElement("#modifiedInput").value.includes("UBMK 2026"));
   assert.ok(app.getElement("#alignedDiff").innerHTML.includes("aligned-row"), "startup diff should render line rows");
   assert.ok(app.getRows().length > 600, "startup UBMK fixture should produce full-document line rows");
+  assert.ok(app.getElement("#alignedDiff").innerHTML.includes("data-merge"), "startup diff should render merge buttons for changed rows");
+}
+
+{
+  setInputs("same\nold value\nend", "same\nnew value\nend");
+  const changed = app.getRows().find((row) => row.type === "change");
+  assert.ok(changed, "test fixture should produce a changed row");
+  app.mergeRow(changed.id, "left");
+  assert.equal(app.getElement("#originalInput").value, "same\nnew value\nend");
+  assert.equal(app.getElement("#modifiedInput").value, "same\nnew value\nend");
 }
 
 {
