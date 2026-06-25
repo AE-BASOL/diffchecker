@@ -137,47 +137,28 @@ function pairChangeBlock(block) {
   const inserts = block.filter((row) => row.type === "insert");
   if (!deletes.length || !inserts.length) return block;
 
-  const maxSize = Math.max(deletes.length, inserts.length);
-  const sizeRatio = maxSize / Math.max(1, Math.min(deletes.length, inserts.length));
-  const shouldPair = maxSize <= 4 && sizeRatio <= 1.5 && averageLineSimilarity(deletes, inserts) >= 0.18;
-  if (!shouldPair) return [...deletes, ...inserts];
-
   const paired = [];
-  const pairCount = Math.min(deletes.length, inserts.length);
-  for (let offset = 0; offset < pairCount; offset += 1) {
-    paired.push({
-      type: "change",
-      left: deletes[offset].left,
-      right: inserts[offset].right,
-      leftNo: deletes[offset].leftNo,
-      rightNo: inserts[offset].rightNo,
-      leftIndex: deletes[offset].leftIndex,
-      rightIndex: inserts[offset].rightIndex
-    });
+  const rowCount = Math.max(deletes.length, inserts.length);
+  for (let offset = 0; offset < rowCount; offset += 1) {
+    const deleted = deletes[offset];
+    const inserted = inserts[offset];
+    if (deleted && inserted) {
+      paired.push({
+        type: "change",
+        left: deleted.left,
+        right: inserted.right,
+        leftNo: deleted.leftNo,
+        rightNo: inserted.rightNo,
+        leftIndex: deleted.leftIndex,
+        rightIndex: inserted.rightIndex
+      });
+    } else if (deleted) {
+      paired.push(deleted);
+    } else {
+      paired.push(inserted);
+    }
   }
-  return paired.concat(deletes.slice(pairCount), inserts.slice(pairCount));
-}
-
-function averageLineSimilarity(deletes, inserts) {
-  const pairCount = Math.min(deletes.length, inserts.length);
-  if (!pairCount) return 0;
-  let total = 0;
-  for (let index = 0; index < pairCount; index += 1) {
-    total += lineSimilarity(deletes[index].left, inserts[index].right);
-  }
-  return total / pairCount;
-}
-
-function lineSimilarity(left, right) {
-  const leftWords = new Set(normalize(left).match(/[^\s,.;:()[\]{}]+/g) || []);
-  const rightWords = new Set(normalize(right).match(/[^\s,.;:()[\]{}]+/g) || []);
-  if (!leftWords.size && !rightWords.size) return 1;
-  if (!leftWords.size || !rightWords.size) return 0;
-  let overlap = 0;
-  leftWords.forEach((word) => {
-    if (rightWords.has(word)) overlap += 1;
-  });
-  return overlap / Math.max(leftWords.size, rightWords.size);
+  return paired;
 }
 
 function tokenDiff(left, right) {
