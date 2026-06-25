@@ -1,0 +1,625 @@
+\documentclass[conference,a4paper]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage[table]{xcolor}
+\usepackage{siunitx}
+\usepackage{enumitem}
+\usepackage{pgfplots}
+\usepackage{float}
+\usepackage{dblfloatfix}
+% \usepackage{stfloats}
+
+\pgfplotsset{compat=1.18}
+
+\usetikzlibrary{positioning, arrows.meta, decorations.pathmorphing}
+
+\definecolor{acceptblue}{HTML}{4E79A7}
+\definecolor{rejectorange}{HTML}{E15759}
+
+\definecolor{accepttint}{HTML}{DCE6F1}
+\definecolor{rejecttint}{HTML}{FBE0DE}
+\usepackage{tabularx}
+
+\usepackage[hyphens]{url}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{placeins}
+\graphicspath{{fig/}}
+
+\setlength{\parskip}{6pt}
+\setlength{\floatsep}{14pt}
+\setlength{\textfloatsep}{10pt}
+\setlength{\intextsep}{10pt}
+
+\usepackage{titlesec}
+\titlespacing*{\section}{0pt}{8pt}{4pt}
+\titlespacing*{\subsection}{0pt}{6pt}{3pt}
+\titlespacing*{\subsubsection}{0pt}{4pt}{2pt}
+\usepackage{geometry}
+\geometry{a4paper, top=2cm, bottom=2.5cm, left=1.6cm, right=1.6cm}
+\usepackage[font=footnotesize]{caption}
+
+\pagestyle{empty}
+\thispagestyle{empty}
+
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+\begin{document}
+
+  \title{Microarchitecture-Generation Dependence of\\
+  ML-KEM Decapsulation Timing Leakage}
+
+  \author{
+  \IEEEauthorblockN{Ahmet Efe Başol}
+  \IEEEauthorblockA{\textit{Department of Computer Engineering} \\
+  \textit{Istanbul Technical University}\\
+  Istanbul, Turkey \\
+  basol24@itu.edu.tr}
+  \and
+  \IEEEauthorblockN{Mehmet Tahir Sandıkkaya}
+  \IEEEauthorblockA{\textit{Department of Computer Engineering} \\
+  \textit{Istanbul Technical University}\\
+  Istanbul, Turkey \\
+  sandikkaya@itu.edu.tr}
+  }
+
+  \maketitle
+
+  \begin{abstract}
+    ML-KEM (FIPS~203) is the standardised post-quantum key encapsulation mechanism.
+    This study investigates whether the Fujisaki--Okamoto (FO) implicit-rejection
+    guard in the \texttt{mlkem-native} decapsulation path leaks ACCEPT/REJECT timing
+    information. The natural hypothesis, that the conditional-select
+    guard \texttt{mlk\_ct\_cmov\_zero} acts as a branch-predictor oracle, is first falsified:
+    across seven compiler configurations (GCC and Clang, \texttt{-O2/-O3/-Os}), the guard compiles to branchless assembly. The guard compiles to branchless assembly. No branch is present in any configuration.A repeatable full-path timing separation nonetheless persists. Measured under an identical fixed-data, balanced protocol on the same source and compiler, the separation is microarchitecture-generation dependent: on an Intel Westmere core (1st-generation Core, circa 2010) ACCEPT is measurably slower than REJECT, exhibiting a statistically significant penalty of approximately 80 cycles, whereas on an Intel Raptor Lake core (14th-generation, 2023) no repeatable separation is observed. The microarchitecture generation determines the outcome. Per-iteration performance counter show Westmere incurs roughly $58\times$ more L1 data-cache misses than Raptor Lake, with ACCEPT producing measurably more misses on Westmere ($d = {+}0.35$). The timing behaviour is therefore consistent with a data-dependent L1D cache-pressure effect in the ciphertext-decompression path, exposed on older cores but masked on modern ones.
+  \end{abstract}
+
+  \begin{IEEEkeywords}
+    post-quantum cryptography, ML-KEM, FIPS~203, timing side-channel,
+    constant-time, microarchitecture, Fujisaki--Okamoto transform, cache
+  \end{IEEEkeywords}
+
+  %==============================================================================
+  \section{Introduction}\label{sec:intro}
+  %==============================================================================
+  In 2024 NIST finalised ML-KEM as the post-quantum key encapsulation mechanism (KEM) under
+  FIPS~203~\cite{nist_fips_203}. Timing attacks, introduced by Kocher~\cite{kocher1996timing},
+  remain a practical threat whenever execution time varies with secret-dependent data.
+
+ \begin{figure}[t]
+    \centering
+    \resizebox{0.94\columnwidth}{!}{%
+    \begin{tikzpicture}[
+      >=Stealth,
+      node distance=10mm and 14mm,
+      every node/.style={font=\small},
+      stage/.style={
+      draw, rectangle, rounded corners=2pt,
+      minimum width=30mm, minimum height=9mm,
+      align=center
+      },
+      primitive/.style={
+      draw, rectangle, fill=black!5,
+      minimum width=44mm, minimum height=9mm,
+      align=center, font=\small\ttfamily
+      },
+      keylab/.style={
+      draw=none, font=\footnotesize, inner sep=2pt
+      },
+      flow/.style={->, thick},
+      fail/.style={->, thick, decorate,
+      decoration={snake, segment length=2mm, amplitude=0.5mm, post length=1.5mm}},
+      lab/.style={font=\footnotesize\itshape}
+      ]
+      \node[stage] (input)  {Input $c$};
+      \node[stage, right=of input] (reenc)  {Re-encapsulate\\ (deterministic)};
+      \node[stage, right=of reenc] (cprime) {Recompute $c'$};
+      \node[stage, below=14mm of reenc] (cmp) {Compare $c$ vs $c'$};
+      \node[primitive, below=22mm of cmp] (cmov) {mlk\_ct\_cmov\_zero};
+      \node[keylab, left=18mm of cmov, anchor=east] (kreal) {$K_{\mathrm{real}}$};
+      \node[keylab, right=18mm of cmov, anchor=west] (kpseudo) {$K_{\mathrm{pseudo}}$};
+      \node[stage, below=of cmov] (out) {Output $K$\\(real or pseudo)};
+      \draw[flow] (input)  -- (reenc);
+      \draw[flow] (reenc)  -- (cprime);
+      \draw[flow] (cprime.south) |- (cmp.east);
+      \draw[flow] (cmp.south) -- ++(0,-5mm) -| (kreal.north)
+      node[pos=0.78, above, lab] {match};
+      \draw[fail] (cmp.south) -- ++(0,-5mm) -| (kpseudo.north)
+      node[pos=0.78, above, lab] {mismatch};
+      \draw[flow] (kreal.east) -- (cmov.west);
+      \draw[flow] (kpseudo.west) -- (cmov.east);
+      \draw[flow] (cmov.south) -- (out.north);
+    \end{tikzpicture}%
+    }
+    \caption{ML-KEM decapsulation with the Fujisaki--Okamoto implicit-rejection guard. The
+    ciphertext is re-encapsulated and recompared; on mismatch the constant-time selector
+    \texttt{mlk\_ct\_cmov\_zero} returns a pseudo-random key rather than the true shared
+    secret. This guard is the timing target examined in this study.}
+    \label{fig:fo-flow}
+  \end{figure}
+
+
+
+
+
+
+  A fundamental tension exists between source-level constant-time guarantees and
+  the microarchitectural behaviour they enforce. Code written to
+  avoid secret-dependent branches may still exhibit timing variation: processors
+  execute constant-time constructs through pipelines, caches, and predictors whose
+  timing is not specified by the instruction-set architecture (ISA). This gap is the target
+  of the present study, instantiated at the FO-transform guard in ML-KEM decapsulation.
+  This paper characterises that gap.
+
+
+  ML-KEM \texttt{Decaps} calls decrypt, re-encrypt, and compare (Figure~\ref{fig:fo-flow});
+  on mismatch the
+  Fujisaki--Okamoto implicit-rejection rule invokes the conditional-select guard,
+  which returns a pseudo-random value rather than the true shared secret. The
+  data-dependent step is the ciphertext-decompression routine,
+  whose reconstructed coefficient values vary with the ciphertext even when its
+  write indices are stride-regular. Analysis of the assembly confirmed the absence
+  of a branch. This observation directs the investigation toward architectural mechanisms
+  to understand what makes the paths distinguishable and on which hardware.
+
+  In this study, the FO-transform guard is first evaluated to determine whether it
+  compiles to branchless assembly across all tested compiler configurations. Building on this
+  foundation, the presence of a statistically significant ACCEPT/REJECT timing separation
+  is measured in ML-KEM decapsulation under controlled conditions. Finally, the analysis investigates whether
+  a timing separation observed on different x86 processors under an identical protocol.
+
+
+     \begin{table*}[!b]
+    \centering
+    \caption{Positioning table: ML-KEM / Kyber timing side-channel literature.}
+    \label{tab:related}
+    \scriptsize
+    \renewcommand{\arraystretch}{1.2}
+    \setlength{\tabcolsep}{3pt}
+    \begin{tabularx}{\textwidth}{|p{1.7cm}|p{2.3cm}|p{2.3cm}|p{2.0cm}|X|}
+      \hline
+      \rowcolor{accepttint} Work & Platform / Gen. & Target & Type & Signal source \\
+      \hline
+      KyberSlash~\cite{bernstein2025kyberslash} &
+      ARM Cortex-A7/M4 &
+      \texttt{poly\_compress} (div by $q$) &
+      Attack (key recovery) &
+      Variable-time division (ISA-level) \\
+      \hline
+      Clangover (CVE-2024-37880)~\cite{clangover2024} &
+      Any (Clang ${\le}18$) &
+      \texttt{poly\_frommsg} &
+      Attack (compiler branch) &
+      Compiler-reintroduced secret branch \\
+      \hline
+      Guo et al.~\cite{guo2022timing} &
+      Software &
+      FrodoKEM FO path &
+      Attack (key recovery) &
+      Decryption-failure timing \\
+      \hline
+      Xu et al.~\cite{xu2022timing} &
+      Software (x86) &
+      Kyber CCA interface &
+      Attack (CC cache) &
+      Chosen-ciphertext cache amplification \\
+      \hline
+      Ravi et al.~\cite{ravi2020sca} &
+      Embedded MCUs &
+      Lattice KEM CCA &
+      Attack (generic SCA) &
+      Power/EM/timing \\
+      \hline
+      Almeida et al.~\cite{almeida2024formal} &
+      Source-level &
+      Full ML-KEM &
+      Formal verification &
+      N/A (ISA-level CT proof) \\
+      \hline
+      GoFetch~\cite{chen2024gofetch} &
+      Apple Silicon (M-series) &
+      \texttt{Kyber}/ML-KEM key material &
+      Attack (DMP key recovery) &
+      Data memory-dependent prefetcher (DMP) pointer derefs \\
+      \hline
+      Hermelink et al.~\cite{hermelink2024} &
+      Masked ML-KEM (embedded) &
+      FO compare step &
+      Attack (key recovery) &
+      Masked-comparison leakage in FO re-encryption \\
+      \hline
+      \textbf{This work} &
+      \textbf{x86 Westmere (2010) vs Raptor Lake (2023)} &
+      \textbf{\texttt{mlkem-native} public API} &
+      \textbf{Characterisation} &
+      \textbf{Cache pressure consistent with L1D miss asymmetry in the decompression routine} \\
+      \hline
+    \end{tabularx}
+  \end{table*}
+  
+  %==============================================================================
+  \section{Background}\label{sec:background}
+  %==============================================================================
+  
+  \subsection{ML-KEM, the FO Transform, and Constant-Time}
+  ML-KEM is built from an IND-CPA-secure public-key encryption scheme over module lattices
+  (Module-LWE), wrapped by a Fujisaki--Okamoto (FO) transform that yields IND-CCA2 security:
+  \begin{equation}
+    R_q = \mathbb{Z}_q[X]/(X^n+1), \quad n=256,\; q=3329,\; k=3 .
+  \end{equation}
+  During decapsulation the recipient decrypts, re-encrypts, and compares; on mismatch the FO
+  implicit-rejection rule returns a pseudo-random key via the conditional-select guard.
+  This selection is implemented as constant-time conditional-select code rather than a
+  data-dependent branch, to avoid leaking the comparison result. The security argument
+  assumes this constant-time property holds through compilation and microarchitectural execution,
+  not only in the source.
+
+ 
+
+  The \texttt{polyvec\_decompress\_du} routine reconstructs polynomial coefficients from the
+  $d_u{=}10$-bit packed ciphertext. Its write indices are stride-regular, fixed over
+  coefficient positions independent of the data. The reconstructed coefficient
+  values are data-dependent. Downstream NTT steps read these values, so the memory
+  working set varies with the ciphertext at the level of values, not addresses. This
+  data-dependent memory-access pattern is what the present study examines.
+  
+  \subsection{Microarchitecture and Cache-Generation Dependence}
+  Whether a constant-time source construct executes in constant time depends on the
+  microarchitecture, which the ISA leaves unspecified. Two processor generations may run the
+  same branchless code yet show markedly different memory-system behaviour. Key axes of variation include
+  private L1 data-cache capacity (Westmere: 32\,KB; Raptor Lake: 48\,KB), hardware-prefetch
+  aggressiveness, and the depth of the out-of-order execution window (roughly 96 entries on Westmere versus 512 on Raptor Lake~\cite{intel_sdm}). On an older architecture with a smaller cache and a narrower execution window, a
+  data-dependent working set can more readily reach capacity pressure, forcing pipeline stalls. Conversely, a newer architecture with a larger cache, more sophisticated replacement policies, and aggressive prefetching can absorb and mask the same memory-access pattern without exposing a timing differential.
+
+  This creates a source-versus-microarchitecture gap. A routine that is rigorously verified as constant-time in source code may still interact with the cache hierarchy in a
+  data-dependent way that becomes visible on some generations but remains entirely hidden on others. Determining whether such a gap
+  produces an observable, statistically significant timing asymmetry—and identifying the specific hardware on which it manifests—is the core question this study addresses. By comparing two microarchitectures separated by over a decade, this research isolates the generation-dependent component of timing leakage.
+
+ 
+
+  %==============================================================================
+  \section{Related Work}\label{sec:related}
+  %==============================================================================
+  Prior work addresses timing side channels in lattice KEMs primarily at the source or
+  compiler level, or on a single platform. Table~\ref{tab:related} positions the present
+  study against the closest related work along five axes.
+  GoFetch~\cite{chen2024gofetch} demonstrates active DMP-driven key recovery on Apple Silicon;
+  the present study, by contrast, passively characterises timing separation across x86
+  microarchitecture generations without making an exploitability claim.
+
+  Classic cache-timing analysis~\cite{bernstein2005cache,osvik2006cache,percival2005cache}
+  and cross-platform PQC benchmarking~\cite{kannwischer2019pqm4} establish the measurement
+  primitives but do not compare Intel microarchitecture generations on the same ML-KEM codebase.
+  The mechanism is consistent with L1D capacity pressure (32\,KB vs.\ 48\,KB;
+  ${\sim}58{\times}$ miss-rate difference).
+  On Westmere, a separation persists across all tested compiler configurations
+  ($d{=}{+}0.22$--${+}0.39$, public API); on Raptor Lake no repeatable separation is
+  observed ($|d|{<}0.016$).
+  Attribution stops at ``consistent with''; no causal claim is advanced.
+
+ 
+
+  %==============================================================================
+  \section{Methodology}\label{sec:method}
+  %==============================================================================
+  \subsection{Target and platforms}
+  All experiments use stock \texttt{mlkem-native} v1.1.0 (commit \texttt{d2cae2b}), the
+  ML-KEM-768 parameter set, with \texttt{kem.c}/\texttt{indcpa.c}/\texttt{verify.c}
+  unmodified. The public decapsulation API is measured. Table~\ref{tab:platforms-method} lists the
+  platforms. The two x86 cores, Westmere (i3-M380) and Raptor Lake (i9-14900K), are the
+  generation pair central to RQ3.
+
+
+    \begin{table}[H]
+    \centering
+    \caption{Measurement platforms. Same source and commit on all.}
+    \label{tab:platforms-method}
+    \footnotesize
+    \setlength{\tabcolsep}{3pt}
+    \renewcommand{\arraystretch}{1.9}
+    \resizebox{\columnwidth}{!}{%
+    \begin{tabular}{|l|l|l|l|}
+      \hline
+      \rowcolor{accepttint} Platform & CPU & Timing source & Isolation \\
+      \hline
+      x86 Westmere    & i3-M380       & LFENCE+RDTSC+LFENCE & taskset+SCHED\_FIFO \\
+      \hline
+      x86 Raptor Lake & i9-14900K     & LFENCE+RDTSC+LFENCE & taskset+SCHED\_FIFO \\
+      \hline
+    \end{tabular}}
+  \end{table}
+
+  Across seven compiler configurations (GCC and Clang at \texttt{-O2}/\texttt{-O3}/\texttt{-Os}),
+  disassembly of \texttt{mlk\_ct\_cmov\_zero} contains no conditional branch.
+  No source-level branch effect is possible.
+
+  \subsection{Fixed-data protocol}
+  Random per-iteration inputs inject NTT-related cache noise that swamps the signal. A
+  deterministic fixed-data protocol is employed: \texttt{keypair\_derand} and \texttt{enc\_derand} with
+  \texttt{seed=0} yield a single reproducible key-ciphertext tuple, alongside a fixed invalid ciphertext.
+  Every ACCEPT (and every REJECT) execution processes identical data. This removes run-to-run data
+  variance and isolates the path-dependent component from NTT cache noise.
+
+  \subsection{Balanced measurement and slot-position controls}
+  Early two-slot loops exhibited warm-cache/slot-position bias. The final x86 protocol
+  interleaves ACCEPT and REJECT in a balanced AR/RA order with paired analysis; this
+  alternation explicitly cancels first-order warm-cache bias. On Raptor Lake, same-ciphertext
+  (both slots ACCEPT) and slot-swap controls were additionally run to quantify residual
+  slot-position effects independent of the path.
+  Algorithm~\ref{alg:balanced} summarises the balanced loop.
+
+  \begin{algorithm}[htbp]
+    \caption{Balanced AR/RA measurement loop}
+    \label{alg:balanced}
+    \begin{algorithmic}[1]
+      \Require{$N$ iterations, fixed (keypair, ct\_valid, ct\_bad)}
+      \For{$i = 0$ to $N-1$}
+      \If{$i$ is even}  \Comment{AR order}
+      \State $t_{A,i} \gets \text{measure}(\textsc{Decaps}(\text{sk}, \text{ct\_valid}))$
+      \State $t_{R,i} \gets \text{measure}(\textsc{Decaps}(\text{sk}, \text{ct\_bad}))$
+      \State $\delta_i \gets t_{A,i} - t_{R,i}$
+      \Else \Comment{RA order}
+      \State $t_{R,i} \gets \text{measure}(\textsc{Decaps}(\text{sk}, \text{ct\_bad}))$
+      \State $t_{A,i} \gets \text{measure}(\textsc{Decaps}(\text{sk}, \text{ct\_valid}))$
+      \State $\delta_i \gets t_{A,i} - t_{R,i}$
+      \EndIf
+      \EndFor
+      \State Apply Tukey $3\times$IQR filter to $\{\delta_i\}$
+      \State Report $\bar{\delta}$, Cohen's $d$, bootstrap 95\% CI
+    \end{algorithmic}
+  \end{algorithm}
+
+  \subsection{Statistics}
+  Results report the mean cycle difference $\Delta(\mathrm{A}{-}\mathrm{R})$, Cohen's $d$,
+  and permutation/bootstrap significance with 95\% confidence intervals. Outliers are removed
+  with Tukey fences (factor-$3{\times}$ IQR), justified as a conservative choice over the standard
+  $1.5{\times}$ multiplier to retain valid tail latency without discarding true scheduling noise.
+  Each condition uses \num{50000}--\num{100000} iterations, yielding bootstrap CIs with ${\sim}1$-cycle precision.
+  A \emph{two-tier} reporting
+  policy is adopted: Tier~1 claims concern the measured cycle gap; Tier~2 statements about
+  microarchitectural cause are framed as ``consistent with'' hypotheses, never as proven attribution.
+
+  \subsection{Boundary note}
+  Direction is boundary-sensitive: at the \emph{internal} \texttt{mlk\_indcpa\_dec} boundary
+  the sign reverses (REJECT slower, $d\approx{-}0.55$) because that boundary excludes
+  re-encryption and the FO guard. All Tier~1 claims in this paper are made at the
+  \emph{public-API} boundary; internal-boundary numbers are not projected onto it.
+
+  %==============================================================================
+  \section{Results}\label{sec:results}
+  %==============================================================================
+  \subsection{RQ1: The guard is branchless}
+  Across all seven tested compiler configurations (GCC and Clang at \texttt{-O2}, \texttt{-O3},
+  \texttt{-Os} on x86), the disassembly of the conditional-select guard contains no conditional
+  branch. The guard is realised as a bitwise mask-and-select sequence: the comparison result is
+  expanded into a full-width mask by an arithmetic shift (\texttt{sar} under GCC, \texttt{neg}
+  followed by \texttt{shr} under Clang), and an \texttt{xor}/\texttt{and}/\texttt{xor} triplet
+  selects the output without a data-dependent jump. The only \texttt{jne} instruction present
+  governs the 32-byte loop counter and is data-independent. The branch-predictor-oracle
+  hypothesis is ruled out at the source-to-assembly level. Any observed timing signal cannot be
+  a source-level branch effect.
+
+  \subsection{RQ2: Positive separation on Westmere}
+  At the public-API boundary on Westmere, three independent balanced runs are directionally
+  consistent: ACCEPT is slower than REJECT by $\Delta = {+}80$ to ${+}84$ cycles, with
+  $d = {+}0.22$ to ${+}0.39$ and paired bootstrap 95\% confidence intervals excluding zero in
+  all three runs ($p \approx 0$). Each run draws between \num{50000} and \num{100000} paired samples
+  under the fixed-data protocol. The separation is repeatable and survives the slot-position
+  controls. A directionally consistent excess of ACCEPT L1 data-cache misses accompanies it
+  ($d = {+}0.35$; Table~\ref{tab:l1d}).
+
+  \subsection{RQ3: The separation is generation-dependent}
+ Under the identical protocol, source, and compiler, Raptor Lake shows no repeatable
+  separation (Table~\ref{tab:gen}). All three canonical runs trigger a slot-artifact gate:
+  the per-slot effect sizes disagree in sign, so the small positive $\Delta$ values
+  ($|d| < 0.016$) cannot be attributed to a path-dependent signal. Same-ciphertext and
+  slot-swap controls show a slot-position penalty of $\sim$19--34 cycles ($|d|\approx0.03$),
+  comparable to or larger than the balanced signal itself, and falsify a warm-cache
+   explanation. The conservative verdict is no repeatable separation on Raptor Lake.
+
+  \begin{table}[t]
+    \centering
+    \caption{Cross-generation full-path result (identical protocol).}
+    \label{tab:gen}
+    \footnotesize
+    \renewcommand{\arraystretch}{1.2}
+    \resizebox{\columnwidth}{!}{%
+    \begin{tabular}{|l|l|r|r|l|}
+      \hline
+      \rowcolor{accepttint} Platform & CPU & $\Delta$(A$-$R) & Cohen $d$ & Verdict \\
+      \hline
+      Westmere    & i3-M380   & ${+}80$ to ${+}84$ cy & ${+}0.22$..${+}0.39$ & \textbf{Separation} \\
+      \hline
+      Raptor Lake & i9-14900K & ${+}10$ to ${+}19$ cy & $<{+}0.016$          & Inconclusive \\
+      \hline
+    \end{tabular}}
+  \end{table}
+
+  The cross-generation contrast is visualised in Figure~\ref{fig:f1-gen-contrast}, which plots
+  the per-platform effect sizes at the public-API boundary
+  \texttt{PQCP\_MLKEM\_NATIVE\_MLKEM768\_dec}.
+
+
+  \begin{figure}[b]
+    \centering
+    \begin{tikzpicture}
+      \begin{axis}[
+        width=0.82\columnwidth, height=0.5\columnwidth,
+        symbolic y coords={Apple M4,Raptor Lake i9,Westmere i3},
+        ytick={Apple M4,Raptor Lake i9,Westmere i3},
+        xlabel={Cohen $d$ (ACCEPT $-$ REJECT)},
+        xmin=-0.015, xmax=0.53,
+        xmajorgrids, major grid style={gray!20},
+        tick label style={font=\scriptsize},
+        label style={font=\scriptsize},
+        enlarge y limits=0.25 ]
+        \draw[dashed,gray!60] (axis cs:0.016,Apple M4)
+        -- (axis cs:0.016,Westmere i3);
+        \addplot[only marks, mark=square*, mark size=2.5pt,
+        color=acceptblue, mark options={fill=acceptblue,draw=acceptblue},
+        error bars/.cd, x dir=both, x explicit]
+        coordinates {(0.305,Westmere i3) +- (0.085,0)};
+        \addplot[only marks, mark=square*, mark size=2.0pt,
+        color=gray!55, mark options={fill=gray!55,draw=gray!55}]
+        coordinates {(0.0118,Raptor Lake i9) (0.0091,Apple M4)};
+      \end{axis}
+    \end{tikzpicture}
+    \caption{Cross-generation Cohen's $d$ by platform. Apple~M4 is shown only as a null baseline.}
+    \label{fig:f1-gen-contrast}
+  \end{figure}
+
+  \subsection{Performance-counter evidence}
+  Per-iteration L1 data-cache miss counts (Table~\ref{tab:l1d}) align with the timing result.
+  On Westmere, ACCEPT incurs $\sim$6 more L1D misses than REJECT ($d = {+}0.35$), directionally
+  consistent with ACCEPT being slower. On Raptor Lake the per-path difference is negligible
+  ($d = {-}0.03$). Critically, Westmere's absolute L1D miss rate ($\sim$152/iter) is
+  roughly $58\times$ Raptor Lake's ($\sim$2.6/iter): a fundamentally different cache-pressure
+  regime. The two cores differ along the axes that govern this regime: Westmere pairs a
+  32\,KB 8-way L1D with conservative prefetch and an ${\sim}96$-entry out-of-order window,
+  whereas Raptor Lake pairs a 48\,KB 12-way L1D with aggressive prefetch and an
+  ${\sim}512$-entry window~\cite{intel_sdm}. (LLC and dTLB counters returned zero on both
+  platforms, a hardware-counter limitation.)
+
+ \begin{table}[t]
+    \centering
+    \caption{Per-iteration L1D-miss counts (fixed-data).}
+    \label{tab:l1d}
+    \small
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabular}{|l|r|r|r|r|}
+      \hline
+      \rowcolor{accepttint} Platform & ACCEPT & REJECT & $\Delta$ & $d$ \\
+      \hline
+      Westmere    & 152.31 & 146.37 & ${+}5.94$  & ${+}0.351$ \\
+      \hline
+      Raptor Lake & 2.639  & 2.687  & ${-}0.048$ & ${-}0.035$ \\
+      \hline
+    \end{tabular}
+  \end{table}
+
+  Figure~\ref{fig:f2-l1d-capacity} shows the ${\sim}58{\times}$ L1D capacity contrast between platforms.
+
+ \begin{figure}[b]
+    \centering
+    \begin{tikzpicture}
+      \begin{axis}[
+        ybar, bar width=18pt, width=0.82\columnwidth, height=0.56\columnwidth,
+        enlarge x limits=0.6,
+        symbolic x coords={Westmere,Raptor Lake}, xtick=data,
+        ymode=log, log basis y=10, ymin=1, ymax=3000,
+        ylabel={L1D misses / iter},
+        ymajorgrids, major grid style={gray!20},
+        nodes near coords, point meta=explicit symbolic,
+        nodes near coords style={font=\scriptsize, anchor=west, rotate=90},
+        legend style={at={(0.5,-0.18)},anchor=north,legend columns=2,font=\scriptsize},
+        tick label style={font=\scriptsize},
+        label style={font=\scriptsize} ]
+        \addplot+[fill=acceptblue,draw=black] coordinates {
+        (Westmere,152.31) [\scriptsize 152.31]
+        (Raptor Lake,2.639) [\scriptsize 2.639] };
+        \addlegendentry{ACCEPT}
+        \addplot+[fill=rejectorange,draw=black] coordinates {
+        (Westmere,146.37) [\scriptsize 146.37]
+        (Raptor Lake,2.687) [\scriptsize 2.687] };
+        \addlegendentry{REJECT}
+      \end{axis}
+    \end{tikzpicture}
+    \caption{Per-iteration L1D miss counts (fixed-data, log axis), ACCEPT vs REJECT.}
+    \label{fig:f2-l1d-capacity}
+  \end{figure}
+  
+  \subsection{Localization and its limit}
+  Sub-step isolation on Westmere identifies the decompression routine as the largest
+  isolated contributor, with the \texttt{unpack\_ct} step isolating to $\Delta = {-}35$~cy.
+  The sum of sub-step deltas (${+}68$~cy, ACCEPT slower)
+  contradicts the full-function direction (${-}37$~cy at the internal boundary). Sub-step
+  isolation does not faithfully decompose the full-path signal because the harness alters cache
+  footprint and inter-step dependencies. The contradiction is a measurement artifact, not a data error.
+  Figure~\ref{fig:f3-substep-loc} illustrates the per-sub-step $\Delta$ values and the artifact.
+
+
+% === F4 (localization) — full-width ===
+\begin{figure*}[t]
+  \centering
+  \begin{tikzpicture}
+    \begin{axis}[
+        ybar, bar width=24pt,
+        width=0.92\textwidth, height=0.34\textwidth,
+        symbolic x coords={unpack\_ct,basemul,invntt,poly\_tomsg,polyvec\_ntt,mulcache},
+        xtick=data,
+        x tick label style={font=\small},        % tam genişlikte rotasyon gerekmiyor
+        ylabel={$\Delta$ (ACCEPT $-$ REJECT), cycles},
+        ymin=-50, ymax=115,
+        ymajorgrids, major grid style={gray!20},
+        nodes near coords, nodes near coords style={font=\small, text=black},
+        enlarge x limits=0.10,
+        legend style={at={(0.98,0.97)}, anchor=north east, font=\small,
+                      draw=gray!50, legend cell align=left},
+        tick label style={font=\small},
+        label style={font=\small} ]
+      \addplot[ybar, bar shift=0pt, fill=acceptblue, draw=black] coordinates {
+        (invntt,0.42) (poly\_tomsg,11) (polyvec\_ntt,17.2) (mulcache,80)};
+      \addlegendentry{ACCEPT slower ($\Delta>0$)}
+      \addplot[ybar, bar shift=0pt, fill=rejectorange, draw=black] coordinates {
+        (unpack\_ct,-35) (basemul,-4.89)};
+      \addlegendentry{REJECT slower ($\Delta<0$)}
+    \end{axis}
+  \end{tikzpicture}
+  \caption{Per-sub-step $\Delta$(ACCEPT$-$REJECT) on Westmere at the internal
+    \texttt{mlk\_indcpa\_dec} boundary. Sub-step sum diverges from the full-function
+    direction due to harness isolation artifact (see text).}
+  \label{fig:f3-substep-loc}
+\end{figure*}
+
+  %==============================================================================
+  \FloatBarrier
+  \section{Discussion}\label{sec:discussion}
+  %==============================================================================
+  A repeatable ACCEPT/REJECT timing separation exists at the
+  public-API boundary on Westmere, despite verified branchless assembly. The same protocol yields no repeatable separation on Raptor Lake. The effect is therefore
+  generation-specific, not a universal property of the x86 ISA or the implementation.
+
+   Building on this observation, the performance-counter data suggests a potential mechanism. ACCEPT is both slower and produces more L1D misses on Westmere, with a $58\times$ higher absolute miss rate than Raptor Lake. This pattern is
+  \emph{consistent with} three architectural differences between the two generations:
+ L1D capacity (32\,KB vs.\ 48\,KB), hardware-prefetch aggressiveness,
+  and out-of-order execution depth~\cite{intel_sdm}. Attribution deliberately stops
+  at ``consistent with'': no causal microarchitectural attribution is proven, and no
+  exploitability claim is made. The signal is small relative to scheduling noise and was
+  obtained under controlled fixed-data conditions.
+
+  This timing characterisation also highlights a fundamental methodological challenge in microarchitectural side-channel analysis: the observer effect. The isolation-harness artifact highlighted in Section~\ref{sec:results}-E demonstrates that inserting fine-grained timing checkpoints (e.g., serialising \texttt{RDTSC} instructions) inevitably alters the cache footprint, predictor state, and pipeline scheduling of the target code. In this study, the instrumentation overhead was sufficient to invert the directional timing signal at the full-function level. This confirms that for cache-sensitive, generation-dependent effects, instrumented binaries cannot serve as authoritative sources for end-to-end timing claims; they are strictly limited to providing localisation indicators.
+  
+  Beyond methodology, the hardware-contingent nature of the constant-time property carries concrete deployment implications. While modern microarchitectures such as Raptor Lake effectively mask the data-dependent cache pressure through aggressive prefetching and larger L1 data caches, the observable signal on Westmere demonstrates that the implementation's security relies on the hardware substrate. This poses a risk for long-lifecycle deployments, such as industrial control systems or embedded TLS servers, which often rely on legacy processor generations. As post-quantum cryptography becomes mandatory across all deployment environments, mitigating such data-dependent memory patterns in software—such as by restructuring the decompression routine to normalise its cache footprint—is preferable to relying on the opaque, generation-specific masking properties of newer CPUs.
+
+  Finally, the attribution of the signal to L1D capacity pressure remains an unproven hypothesis requiring further controlled testing. Intel's 8th-generation microarchitecture (Coffee Lake, ${\sim}2017$) is identified as the natural next comparison target. Coffee Lake retains Westmere's 32\,KB private L1D cache while belonging to a much newer Intel generation. This makes it a controlled attribution test: if the L1D miss asymmetry effect persists on Coffee Lake, the L1D capacity-pressure hypothesis is strengthened; if it disappears despite the same 32\,KB L1D cache size, then the Westmere result likely depends on other older-core factors such as cache hierarchy, prefetching behavior, or replacement policy.
+
+  %==============================================================================
+  \section{Conclusion}\label{sec:conclusion}
+  %==============================================================================
+  The branch-predictor-oracle hypothesis for the ML-KEM FO-transform guard has been falsified.
+  A repeatable ACCEPT/REJECT timing separation nonetheless persists on Intel Westmere but not
+  on Intel Raptor Lake under an identical protocol. This is the first cross-generation timing
+  characterisation of ML-KEM on x86. Performance-counter evidence ($58\times$ L1D-miss-rate
+  gap; ACCEPT-correlated misses on Westmere) is consistent with a generation-dependent L1D
+  cache-pressure mechanism, stated as a hypothesis rather than proven attribution. Three
+  limitations bound these findings. The scope is Westmere-specific under a fixed-data
+  protocol. No causal microarchitectural attribution is made. The sub-step isolation
+  artifact (${+}68$~cy sum contradicting the ${-}37$~cy full-function result) prevents
+  reliable signal decomposition. Future work could include a Coffee Lake measurement
+  (32\,KB L1D in a newer generation) to test the cache-capacity hypothesis; a survey of
+  intermediate Intel families (Skylake, Cannon Lake); and investigation of whether a software
+  countermeasure in the decompression routine would eliminate the asymmetry. No claim
+  of practical exploitability is made.
+
+  %==============================================================================
+  \section*{Acknowledgment}
+  The first author thanks Krontech for supporting this academic research.
+
+  \bibliographystyle{IEEEtran}
+  \bibliography{refs}
+
+\end{document}

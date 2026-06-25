@@ -17,7 +17,7 @@ let manualEditorHeight = 0;
 let currentPopover = null;
 let viewMode = "edit";
 
-const sampleOriginal = `Invoice #4102
+const fallbackSampleOriginal = `Invoice #4102
 Customer: Atlas Market
 Status: Pending
 
@@ -29,7 +29,7 @@ Items:
 Delivery window: Friday 09:00-12:00
 Notes: Call warehouse before arrival.`;
 
-const sampleModified = `Invoice #4102
+const fallbackSampleModified = `Invoice #4102
 Customer: Atlas Market
 Status: Approved
 
@@ -42,9 +42,19 @@ Items:
 Delivery window: Friday 10:00-13:00
 Notes: Call warehouse gate before arrival.`;
 
+const sampleOriginal = window.ubmk26Sample?.original || fallbackSampleOriginal;
+const sampleModified = window.ubmk26Sample?.modified || fallbackSampleModified;
+
 function normalize(value) {
   let next = value;
   if (ignoreWhitespace.checked) next = next.trim().replace(/\s+/g, " ");
+  if (ignoreCase.checked) next = next.toLowerCase();
+  return next;
+}
+
+function normalizeLineAnchor(value) {
+  let next = value.trim();
+  if (ignoreWhitespace.checked) next = next.replace(/\s+/g, " ");
   if (ignoreCase.checked) next = next.toLowerCase();
   return next;
 }
@@ -65,14 +75,23 @@ function lcsMatrix(left, right, equals) {
   return matrix;
 }
 
+function nearestLineMatch(lines, start, needle, limit = 120) {
+  const normalizedNeedle = normalizeLineAnchor(needle);
+  const end = Math.min(lines.length, start + limit);
+  for (let index = start; index < end; index += 1) {
+    if (normalizeLineAnchor(lines[index]) === normalizedNeedle) return index - start;
+  }
+  return Number.POSITIVE_INFINITY;
+}
+
 function lineDiff(leftLines, rightLines) {
-  const matrix = lcsMatrix(leftLines, rightLines, (a, b) => normalize(a) === normalize(b));
+  const matrix = lcsMatrix(leftLines, rightLines, (a, b) => normalizeLineAnchor(a) === normalizeLineAnchor(b));
   const rows = [];
   let i = 0;
   let j = 0;
 
   while (i < leftLines.length || j < rightLines.length) {
-    if (i < leftLines.length && j < rightLines.length && normalize(leftLines[i]) === normalize(rightLines[j])) {
+    if (i < leftLines.length && j < rightLines.length && normalizeLineAnchor(leftLines[i]) === normalizeLineAnchor(rightLines[j])) {
       rows.push({
         type: "equal",
         left: leftLines[i],
@@ -84,7 +103,7 @@ function lineDiff(leftLines, rightLines) {
       });
       i += 1;
       j += 1;
-    } else if (j < rightLines.length && (i === leftLines.length || matrix[i][j + 1] >= matrix[i + 1][j])) {
+    } else if (shouldTakeInsert(leftLines, rightLines, matrix, i, j)) {
       rows.push({
         type: "insert",
         left: "",
@@ -109,7 +128,24 @@ function lineDiff(leftLines, rightLines) {
     }
   }
 
-  return pairDeleteInsertRows(rows);
+  return pairMovedBlocks(pairDeleteInsertRows(rows));
+}
+
+function shouldTakeInsert(leftLines, rightLines, matrix, i, j) {
+  if (j >= rightLines.length) return false;
+  if (i >= leftLines.length) return true;
+
+  const insertScore = matrix[i][j + 1];
+  const deleteScore = matrix[i + 1][j];
+  if (insertScore !== deleteScore) return insertScore > deleteScore;
+
+  const leftLineAppearsInRight = nearestLineMatch(rightLines, j + 1, leftLines[i]);
+  const rightLineAppearsInLeft = nearestLineMatch(leftLines, i + 1, rightLines[j]);
+  if (leftLineAppearsInRight !== rightLineAppearsInLeft) {
+    return leftLineAppearsInRight < rightLineAppearsInLeft;
+  }
+
+  return false;
 }
 
 function pairDeleteInsertRows(rows) {
@@ -145,6 +181,108 @@ function pairChangeBlock(block) {
     if (deleted && inserted) {
       paired.push({
         type: "change",
+        left: deleted.left,
+        right: inserted.right,
+        leftNo: deleted.leftNo,
+        rightNo: inserted.rightNo,
+        leftIndex: deleted.leftIndex,
+        rightIndex: inserted.rightIndex
+      });
+    } else if (deleted) {
+      paired.push(deleted);
+    } else {
+      paired.push(inserted);
+    }
+  }
+  return paired;
+}
+
+function pairMovedBlocks(rows) {
+  const blocks = collectSingleSideBlocks(rows);
+  const deletes = blocks.filter((block) => block.type === "delete");
+  const inserts = blocks.filter((block) => block.type === "insert");
+  const candidates = [];
+  const matchedDeletes = new Set();
+  const matchedInserts = new Set();
+  const insertReplacements = new Map();
+
+  inserts.forEach((insertBlock) => {
+    deletes.forEach((deleteBlock) => {
+      const score = blockSimilarity(deleteBlock.rows, insertBlock.rows);
+      if (score >= 0.72) {
+        candidates.push({ deleteBlock, insertBlock, score });
+      }
+    });
+  });
+
+  candidates
+    .sort((a, b) => b.score - a.score)
+    .forEach(({ deleteBlock, insertBlock }) => {
+      if (matchedDeletes.has(deleteBlock.start) || matchedInserts.has(insertBlock.start)) return;
+      matchedDeletes.add(deleteBlock.start);
+      matchedInserts.add(insertBlock.start);
+      insertReplacements.set(insertBlock.start, {
+        end: insertBlock.end,
+        rows: pairMovedBlockRows(deleteBlock.rows, insertBlock.rows)
+      });
+  });
+
+  const result = [];
+  for (let index = 0; index < rows.length; index += 1) {
+    const replacement = insertReplacements.get(index);
+    if (replacement) {
+      result.push(...replacement.rows);
+      index = replacement.end;
+      continue;
+    }
+
+    const movedDelete = deletes.find((block) => block.start === index && matchedDeletes.has(block.start));
+    if (movedDelete) {
+      index = movedDelete.end;
+      continue;
+    }
+
+    result.push(rows[index]);
+  }
+  return result;
+}
+
+function collectSingleSideBlocks(rows) {
+  const blocks = [];
+  for (let index = 0; index < rows.length; index += 1) {
+    const type = rows[index].type;
+    if (type !== "delete" && type !== "insert") continue;
+    const start = index;
+    const blockRows = [];
+    while (index < rows.length && rows[index].type === type) {
+      blockRows.push(rows[index]);
+      index += 1;
+    }
+    index -= 1;
+    if (blockRows.length >= 3) {
+      blocks.push({ type, start, end: index, rows: blockRows });
+    }
+  }
+  return blocks;
+}
+
+function blockSimilarity(leftRows, rightRows) {
+  const left = leftRows.map((row) => normalizeLineAnchor(row.left));
+  const right = rightRows.map((row) => normalizeLineAnchor(row.right));
+  const matrix = lcsMatrix(left, right, (a, b) => a === b);
+  return matrix[0][0] / Math.max(1, Math.min(left.length, right.length));
+}
+
+function pairMovedBlockRows(deleteRows, insertRows) {
+  const paired = [];
+  const rowCount = Math.max(deleteRows.length, insertRows.length);
+  for (let offset = 0; offset < rowCount; offset += 1) {
+    const deleted = deleteRows[offset];
+    const inserted = insertRows[offset];
+    if (deleted && inserted) {
+      const sameAnchor = normalizeLineAnchor(deleted.left) === normalizeLineAnchor(inserted.right);
+      paired.push({
+        type: sameAnchor ? "equal" : "change",
         left: deleted.left,
         right: inserted.right,
         leftNo: deleted.leftNo,

@@ -95,6 +95,34 @@ function rowTypes(rows) {
   return Array.from(rows, (row) => row.type);
 }
 
+function fixture(name) {
+  return fs.readFileSync(path.join(__dirname, "..", "fixtures", name), "utf8");
+}
+
+function findRowWithBoth(rows, text) {
+  return rows.find((row) => row.left.includes(text) && row.right.includes(text));
+}
+
+function largestBlankRun(rows, blankSide) {
+  const isBlankRunRow = blankSide === "left"
+    ? (row) => row.leftNo === "" && row.rightNo !== ""
+    : (row) => row.rightNo === "" && row.leftNo !== "";
+  return rows.reduce((state, row, index) => {
+    if (isBlankRunRow(row)) {
+      if (state.currentStart === -1) state.currentStart = index;
+      state.current += 1;
+    } else {
+      if (state.current > state.max) {
+        state.max = state.current;
+        state.start = state.currentStart;
+      }
+      state.current = 0;
+      state.currentStart = -1;
+    }
+    return state;
+  }, { current: 0, currentStart: -1, max: 0, start: -1 });
+}
+
 {
   const rows = rowsFor(
     [
@@ -173,6 +201,50 @@ function rowTypes(rows) {
     rowTypes(rows),
     ["equal", "delete", "delete", "equal"],
     "pure deletions should not be converted into fake changed rows"
+  );
+}
+
+{
+  const rows = rowsFor(
+    fixture("original_latex_ubmk26.txt"),
+    fixture("modified_latex_ubmk26.txt")
+  );
+
+  [
+    "\\documentclass[conference,a4paper]{IEEEtran}",
+    "\\section{Results}\\label{sec:results}",
+    "\\section{Discussion}\\label{sec:discussion}",
+    "\\section{Conclusion}\\label{sec:conclusion}",
+    "\\bibliographystyle{IEEEtran}",
+    "\\end{document}"
+  ].forEach((anchor) => {
+    const row = findRowWithBoth(rows, anchor);
+    assert.ok(row, `fixture anchor must align side by side: ${anchor}`);
+    assert.notEqual(row.leftNo, "", `fixture anchor left side must not be blank: ${anchor}`);
+    assert.notEqual(row.rightNo, "", `fixture anchor right side must not be blank: ${anchor}`);
+  });
+
+  const emptyLeftRun = largestBlankRun(rows, "left");
+  const largestEmptyLeftRun = Math.max(emptyLeftRun.max, emptyLeftRun.current);
+  const emptyLeftPreview = rows
+    .slice(Math.max(0, emptyLeftRun.start - 3), emptyLeftRun.start + Math.min(largestEmptyLeftRun, 6))
+    .map((row, index) => {
+      const realIndex = Math.max(0, emptyLeftRun.start - 3) + index;
+      return `#${realIndex} L${row.leftNo}:${row.left.slice(0, 45)} <> R${row.rightNo}:${row.right.slice(0, 45)}`;
+    })
+    .join(" | ");
+  const movedIntroLeft = rows.findIndex((row) => row.left.includes("A fundamental tension exists"));
+  const movedIntroRight = rows.findIndex((row) => row.right.includes("A fundamental tension exists"));
+  const movedIntroPreview = [movedIntroLeft, movedIntroRight]
+    .map((index) => {
+      const row = rows[index];
+      return `#${index} L${row?.leftNo}:${(row?.left || "").slice(0, 45)} <> R${row?.rightNo}:${(row?.right || "").slice(0, 45)}`;
+    })
+    .join(" / ");
+
+  assert.ok(
+    largestEmptyLeftRun < 30,
+    `fixture should not render a huge modified-only stack; largest run was ${largestEmptyLeftRun} near row ${emptyLeftRun.start}: ${emptyLeftPreview}; moved intro: ${movedIntroPreview}`
   );
 }
 
