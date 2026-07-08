@@ -118,6 +118,69 @@ h2 {
   background: var(--accent-strong);
 }
 
+.title-group {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+}
+
+.history-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.icon-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.icon-button:hover:not(:disabled) {
+  background: var(--change-bg);
+  color: var(--change-ink);
+  border-color: var(--accent);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+}
+
+.icon-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.button.outline-sample {
+  border-color: var(--change-ink);
+  color: var(--change-ink);
+}
+.button.outline-sample:hover {
+  background: var(--change-bg);
+}
+
+.button.outline-swap {
+  border-color: var(--insert-ink);
+  color: var(--insert-ink);
+}
+.button.outline-swap:hover {
+  background: var(--insert-bg);
+}
+
+.button.outline-clear {
+  border-color: var(--delete-ink);
+  color: var(--delete-ink);
+}
+.button.outline-clear:hover {
+  background: var(--delete-bg);
+}
+
 .editor-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
