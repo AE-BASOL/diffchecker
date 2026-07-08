@@ -1,20 +1,20 @@
 ---
 milestone: v1.1
 name: History & UX Polish
-status: planning
+status: completed
 progress:
-  phases_total: 0
-  phases_done: 0
+  phases_total: 2
+  phases_done: 2
 ---
 
 # Project State
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: Complete
 Plan: —
-Status: Defining requirements
-Last activity: 2026-07-08 — Milestone v1.1 started
+Status: Milestone completed. Undo/Redo Engine and Empty Startup applied.
+Last activity: 2026-07-09 — Milestone v1.1 completed
 
 ## Accumulated Context
 
