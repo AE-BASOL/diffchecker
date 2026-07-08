@@ -436,6 +436,21 @@ body.resizing-editors {
   background: var(--panel-dark);
 }
 
+.aligned-cell.is-merged {
+  position: relative;
+}
+
+.aligned-cell.is-merged::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--accent);
+  z-index: 2;
+}
+
 .aligned-no {
   padding: 6px 9px;
   border-right: 1px solid var(--line);

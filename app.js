@@ -12,6 +12,8 @@ const ignoreCase = document.querySelector("#ignoreCase");
 const showOnlyChanges = document.querySelector("#showOnlyChanges");
 const linePopover = document.querySelector("#linePopover");
 let currentRows = [];
+let mergedLinesLeft = new Set();
+let mergedLinesRight = new Set();
 let manualEditorHeight = 0;
 let currentPopover = null;
 let viewMode = "edit";
@@ -36,6 +38,10 @@ function resetHistory() {
     timestamp: Date.now()
   }];
   redoStack = [];
+  if (typeof mergedLinesLeft !== "undefined") {
+    mergedLinesLeft.clear();
+    mergedLinesRight.clear();
+  }
   updateHistoryButtons();
 }
 
@@ -66,6 +72,8 @@ function undoHistory() {
   const previousState = undoStack[undoStack.length - 1];
   originalInput.value = previousState.original;
   modifiedInput.value = previousState.modified;
+  mergedLinesLeft.clear();
+  mergedLinesRight.clear();
   updateHistoryButtons();
   compare();
 }
@@ -78,6 +86,8 @@ function redoHistory() {
 
   originalInput.value = nextState.original;
   modifiedInput.value = nextState.modified;
+  mergedLinesLeft.clear();
+  mergedLinesRight.clear();
   updateHistoryButtons();
   compare();
 }
@@ -540,7 +550,21 @@ function renderAlignedCell(row, side, type) {
   const lineNo = side === "left" ? row.leftNo : row.rightNo;
   const text = side === "left" ? row.left : row.right;
   const content = type === "empty" ? "&nbsp;" : escapeHtml(text) || "&nbsp;";
-  return `<div class="aligned-cell ${type}" data-side="${side}">
+  
+  let extraClass = "";
+  let tooltip = "";
+  if (type === "equal") {
+    if (side === "left" && mergedLinesLeft.has(text)) {
+      extraClass = " is-merged";
+      tooltip = ` title="Merged from modified"`;
+    }
+    if (side === "right" && mergedLinesRight.has(text)) {
+      extraClass = " is-merged";
+      tooltip = ` title="Merged from original"`;
+    }
+  }
+
+  return `<div class="aligned-cell ${type}${extraClass}" data-side="${side}"${tooltip}>
     <div class="aligned-no">${lineNo || ""}</div>
     <div class="aligned-text">${content}</div>
   </div>`;
@@ -558,6 +582,7 @@ function mergeRow(rowId, target) {
   const rightLines = splitLines(modifiedInput.value);
 
   if (target === "left") {
+    if (row.type === "change" || row.type === "insert") mergedLinesLeft.add(row.right);
     if (row.type === "change") leftLines[row.leftIndex] = row.right;
     if (row.type === "insert") leftLines.splice(row.leftIndex, 0, row.right);
     if (row.type === "delete") leftLines.splice(row.leftIndex, 1);
@@ -565,6 +590,7 @@ function mergeRow(rowId, target) {
   }
 
   if (target === "right") {
+    if (row.type === "change" || row.type === "delete") mergedLinesRight.add(row.left);
     if (row.type === "change") rightLines[row.rightIndex] = row.left;
     if (row.type === "delete") rightLines.splice(row.rightIndex, 0, row.left);
     if (row.type === "insert") rightLines.splice(row.rightIndex, 1);
@@ -576,6 +602,12 @@ function mergeRow(rowId, target) {
 }
 
 function mergeAll(target) {
+  currentRows.forEach(row => {
+    if (row.type !== "equal") {
+      if (target === "left" && (row.type === "change" || row.type === "insert")) mergedLinesLeft.add(row.right);
+      if (target === "right" && (row.type === "change" || row.type === "delete")) mergedLinesRight.add(row.left);
+    }
+  });
   if (target === "left") originalInput.value = modifiedInput.value;
   if (target === "right") modifiedInput.value = originalInput.value;
   captureHistory();
