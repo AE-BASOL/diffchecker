@@ -16,6 +16,61 @@ let manualEditorHeight = 0;
 let currentPopover = null;
 let viewMode = "edit";
 const compareButton = document.querySelector("#compareButton");
+
+// --- Undo/Redo Engine ---
+let undoStack = [];
+let redoStack = [];
+
+function resetHistory() {
+  undoStack = [{
+    original: originalInput.value,
+    modified: modifiedInput.value,
+    timestamp: Date.now()
+  }];
+  redoStack = [];
+}
+
+function captureHistory() {
+  const currentState = {
+    original: originalInput.value,
+    modified: modifiedInput.value,
+    timestamp: Date.now()
+  };
+  redoStack = [];
+  
+  const top = undoStack[undoStack.length - 1];
+  if (top && top.original === currentState.original && top.modified === currentState.modified) return;
+
+  if (undoStack.length > 1 && (currentState.timestamp - top.timestamp < 1000)) {
+    undoStack[undoStack.length - 1] = currentState;
+  } else {
+    undoStack.push(currentState);
+  }
+}
+
+function undoHistory() {
+  if (undoStack.length <= 1) return;
+  const currentState = undoStack.pop();
+  redoStack.push(currentState);
+
+  const previousState = undoStack[undoStack.length - 1];
+  originalInput.value = previousState.original;
+  modifiedInput.value = previousState.modified;
+  compare();
+}
+
+function redoHistory() {
+  if (redoStack.length === 0) return;
+  const nextState = redoStack.pop();
+  nextState.timestamp = Date.now();
+  undoStack.push(nextState);
+
+  originalInput.value = nextState.original;
+  modifiedInput.value = nextState.modified;
+  compare();
+}
+// ------------------------
+
 const fallbackSampleOriginal = `Invoice #4102
 Customer: Atlas Market
 Status: Pending
@@ -788,27 +843,41 @@ document.addEventListener("click", (event) => {
 });
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") hidePopover();
+  
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
+    event.preventDefault();
+    if (event.shiftKey) {
+      redoHistory();
+    } else {
+      undoHistory();
+    }
+  }
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') {
+    event.preventDefault();
+    redoHistory();
+  }
 });
 document.querySelector("#sampleButton").addEventListener("click", () => {
   if (Object.keys(window.ubmk26Sample || {}).length > 0) {
     originalInput.value = window.ubmk26Sample.original;
     modifiedInput.value = window.ubmk26Sample.modified;
-    compare();
-    showDiffView();
   } else {
     originalInput.value = fallbackSampleOriginal;
     modifiedInput.value = fallbackSampleModified;
-    compare();
-    showDiffView();
   }
+  resetHistory();
+  compare();
+  showDiffView();
 });
 document.querySelector("#swapButton").addEventListener("click", () => {
   [originalInput.value, modifiedInput.value] = [modifiedInput.value, originalInput.value];
+  resetHistory();
   compare();
 });
 document.querySelector("#clearButton").addEventListener("click", () => {
   originalInput.value = "";
   modifiedInput.value = "";
+  resetHistory();
   compare();
   showEditView();
   originalInput.focus();
@@ -820,7 +889,10 @@ showOnlyChanges.addEventListener("change", () => {
   renderAlignedDiff(currentRows);
   if (viewMode === "diff") showDiffView();
 });
-[originalInput, modifiedInput].forEach((input) => input.addEventListener("input", compare));
+[originalInput, modifiedInput].forEach((input) => input.addEventListener("input", () => {
+  captureHistory();
+  compare();
+}));
 [originalInput, modifiedInput].forEach((input) => {
   input.addEventListener("scroll", () => syncHighlightScroll(input));
 });
@@ -836,4 +908,5 @@ originalInput.addEventListener("click", (event) => showEditorPopover(originalInp
 modifiedInput.addEventListener("click", (event) => showEditorPopover(modifiedInput, "right", event));
 installEditorResize();
 
+resetHistory();
 showEditView();
