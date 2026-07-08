@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Diffchecker</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Text compare</p>
+          <h1>Diffchecker</h1>
+        </div>
+        <div class="actions" aria-label="Document actions">
+          <button class="button ghost" id="sampleButton" type="button">Sample</button>
+          <button class="button ghost" id="swapButton" type="button">Swap</button>
+          <button class="button ghost" id="clearButton" type="button">Clear</button>
+          <button class="button primary" id="compareButton" type="button">Compare</button>
+        </div>
+      </header>
+
+      <section class="compare-workspace" aria-label="Text compare workspace">
+        <div class="editor-grid" id="editorGrid" aria-label="Text inputs">
+          <label class="editor-panel">
+            <span class="panel-label">Original</span>
+            <div class="editor-stack">
+              <div class="highlight-layer" id="originalHighlights" aria-hidden="true"></div>
+              <textarea id="originalInput" spellcheck="false" placeholder="Paste original text here"></textarea>
+            </div>
+          </label>
+          <label class="editor-panel">
+            <span class="panel-label">Modified</span>
+            <div class="editor-stack">
+              <div class="highlight-layer" id="modifiedHighlights" aria-hidden="true"></div>
+              <textarea id="modifiedInput" spellcheck="false" placeholder="Paste changed text here"></textarea>
+            </div>
+          </label>
+        </div>
+
+        <section class="aligned-diff-shell" id="alignedDiffShell" aria-label="Aligned diff view">
+          <div class="aligned-diff-header">
+            <div>Original</div>
+            <div aria-hidden="true"></div>
+            <div>Modified</div>
+          </div>
+          <div class="aligned-diff" id="alignedDiff"></div>
+        </section>
+      </section>
+      <button class="resize-handle" id="editorResizeHandle" type="button" aria-label="Resize both editors"></button>
+
+      <section class="toolbar" aria-label="Comparison settings">
+        <label class="toggle">
+          <input id="ignoreWhitespace" type="checkbox">
+          <span>Ignore whitespace</span>
+        </label>
+        <label class="toggle">
+          <input id="ignoreCase" type="checkbox">
+          <span>Ignore case</span>
+        </label>
+        <label class="toggle">
+          <input id="showOnlyChanges" type="checkbox">
+          <span>Only changes</span>
+        </label>
+        <button class="button ghost" id="mergeAllLeftButton" type="button">Merge all left</button>
+        <button class="button ghost" id="mergeAllRightButton" type="button">Merge all right</button>
+        <div class="stats" id="stats" aria-live="polite"></div>
+      </section>
+
+      <div class="line-popover" id="linePopover" role="menu" aria-hidden="true"></div>
+    </main>
+
+    <script src="fixtures/ubmk26-sample.js?v=ubmk26-merge-view"></script>
+    <script src="app.js?v=ubmk26-merge-view"></script>
+  </body>
+</html>

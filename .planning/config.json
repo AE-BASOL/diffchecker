@@ -1,0 +1,9 @@
+{
+  "workflow": {
+    "autoPlan": true
+  },
+  "project": {
+    "stack": "Vanilla HTML/CSS/JS",
+    "theme": "Modern, Smooth, Dark Mode, Micro-animations"
+  }
+}
