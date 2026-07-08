@@ -35,6 +35,8 @@ function resetHistory() {
   undoStack = [{
     original: originalInput.value,
     modified: modifiedInput.value,
+    mergedLeft: new Set(),
+    mergedRight: new Set(),
     timestamp: Date.now()
   }];
   redoStack = [];
@@ -49,6 +51,8 @@ function captureHistory() {
   const currentState = {
     original: originalInput.value,
     modified: modifiedInput.value,
+    mergedLeft: new Set(mergedLinesLeft),
+    mergedRight: new Set(mergedLinesRight),
     timestamp: Date.now()
   };
   redoStack = [];
@@ -72,8 +76,8 @@ function undoHistory() {
   const previousState = undoStack[undoStack.length - 1];
   originalInput.value = previousState.original;
   modifiedInput.value = previousState.modified;
-  mergedLinesLeft.clear();
-  mergedLinesRight.clear();
+  mergedLinesLeft = new Set(previousState.mergedLeft || []);
+  mergedLinesRight = new Set(previousState.mergedRight || []);
   updateHistoryButtons();
   compare();
 }
@@ -86,8 +90,8 @@ function redoHistory() {
 
   originalInput.value = nextState.original;
   modifiedInput.value = nextState.modified;
-  mergedLinesLeft.clear();
-  mergedLinesRight.clear();
+  mergedLinesLeft = new Set(nextState.mergedLeft || []);
+  mergedLinesRight = new Set(nextState.mergedRight || []);
   updateHistoryButtons();
   compare();
 }
