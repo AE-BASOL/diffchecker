@@ -571,12 +571,14 @@ function mergeRow(rowId, target) {
     modifiedInput.value = joinLines(rightLines);
   }
 
+  captureHistory();
   compare();
 }
 
 function mergeAll(target) {
   if (target === "left") originalInput.value = modifiedInput.value;
   if (target === "right") modifiedInput.value = originalInput.value;
+  captureHistory();
   compare();
 }
 
@@ -597,6 +599,7 @@ function deleteLine(rowId, side) {
     modifiedInput.value = joinLines(rightLines);
   }
 
+  captureHistory();
   hidePopover();
   compare();
 }
