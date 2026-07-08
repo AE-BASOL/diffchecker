@@ -836,12 +836,4 @@ originalInput.addEventListener("click", (event) => showEditorPopover(originalInp
 modifiedInput.addEventListener("click", (event) => showEditorPopover(modifiedInput, "right", event));
 installEditorResize();
 
-if (Object.keys(window.ubmk26Sample || {}).length > 0) {
-  originalInput.value = window.ubmk26Sample.original;
-  modifiedInput.value = window.ubmk26Sample.modified;
-} else {
-  originalInput.value = fallbackSampleOriginal;
-  modifiedInput.value = fallbackSampleModified;
-}
-compare();
 showEditView();
