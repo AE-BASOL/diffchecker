@@ -1,0 +1,21 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-07-09T01:17:52+03:00",
+  "phase": "none",
+  "phase_name": "Project Maintenance",
+  "phase_dir": ".planning",
+  "plan": 0,
+  "task": 0,
+  "total_tasks": 0,
+  "status": "paused",
+  "completed_tasks": [],
+  "remaining_tasks": [],
+  "blockers": [],
+  "human_actions_pending": [],
+  "decisions": [
+    {"decision": "Tagged v1.2", "rationale": "Completed Merge Tracking UI and bug fixes.", "phase": "none"}
+  ],
+  "uncommitted_files": [],
+  "next_action": "Start next milestone with /gsd-new-milestone",
+  "context_notes": "We just wrapped up all UI polishes and history bugs and tagged v1.2."
+}
