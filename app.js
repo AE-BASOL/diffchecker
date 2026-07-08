@@ -555,11 +555,11 @@ function renderAlignedCell(row, side, type) {
   let tooltip = "";
   if (type === "equal") {
     if (side === "left" && mergedLinesLeft.has(text)) {
-      extraClass = " is-merged";
+      extraClass = " is-merged-left";
       tooltip = ` title="Merged from modified"`;
     }
     if (side === "right" && mergedLinesRight.has(text)) {
-      extraClass = " is-merged";
+      extraClass = " is-merged-right";
       tooltip = ` title="Merged from original"`;
     }
   }

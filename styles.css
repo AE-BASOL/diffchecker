@@ -436,19 +436,45 @@ body.resizing-editors {
   background: var(--panel-dark);
 }
 
-.aligned-cell.is-merged {
+.aligned-cell.is-merged-left,
+.aligned-cell.is-merged-right {
   position: relative;
 }
 
-.aligned-cell.is-merged::before {
-  content: "";
+.aligned-cell.is-merged-left::after {
+  content: "⟵ Modified";
   position: absolute;
   left: 0;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  background: var(--accent);
-  z-index: 2;
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--insert-bg);
+  color: var(--insert-strong);
+  font-size: 11px;
+  font-weight: 750;
+  padding: 2px 6px;
+  border-radius: 0 4px 4px 0;
+  border: 1px solid var(--insert-ink);
+  border-left: none;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.aligned-cell.is-merged-right::after {
+  content: "Original ⟶";
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--delete-bg);
+  color: var(--delete-strong);
+  font-size: 11px;
+  font-weight: 750;
+  padding: 2px 6px;
+  border-radius: 4px 0 0 4px;
+  border: 1px solid var(--delete-ink);
+  border-right: none;
+  pointer-events: none;
+  z-index: 5;
 }
 
 .aligned-no {
