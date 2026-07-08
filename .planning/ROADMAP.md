@@ -2,4 +2,39 @@
 
 ## [x] v1.0 — UI Simplification & Core Polish (archived → [v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md))
 
-<!-- Next milestone phases go here -->
+---
+
+## v1.1 — History & UX Polish
+
+**Goal:** Add undo/redo support and remove auto-loaded sample text so panels start empty.
+
+| # | Phase | Goal | Requirements | Success Criteria |
+|---|-------|------|--------------|-----------------|
+| 5 | Empty Startup | Remove sample auto-load, add placeholder hints | STRT-01, STRT-02, STRT-03 | 3 |
+| 6 | Undo/Redo Engine | Global history stack + Ctrl+Z/Y keyboard shortcuts | HIST-01, HIST-02, HIST-03 | 3 |
+
+---
+
+### Phase 5: Empty Startup
+
+**Goal:** When the app opens, both panels are empty with placeholder hints — no sample text auto-loaded.
+
+**Requirements:** STRT-01, STRT-02, STRT-03
+
+**Success criteria:**
+1. Page load shows no text in either textarea
+2. Both textareas display "Paste your text here..." as placeholder
+3. No automatic diff computation or sample-load fires on startup
+
+---
+
+### Phase 6: Undo/Redo Engine
+
+**Goal:** User can undo/redo text changes across both panels via Ctrl+Z / Ctrl+Y using a single global history stack.
+
+**Requirements:** HIST-01, HIST-02, HIST-03
+
+**Success criteria:**
+1. Ctrl+Z undoes the last text change (regardless of which panel it was made in)
+2. Ctrl+Y (or Ctrl+Shift+Z) redoes the most recently undone change
+3. Performing a Clear All action resets the undo/redo history

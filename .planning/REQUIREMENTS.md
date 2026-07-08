@@ -1,15 +1,34 @@
-# Requirements
+# Requirements — v1.1 History & UX Polish
 
-## Epic 1: Modern UI & UX Overhaul
-- **REQ-1.1**: Implement a sleek, modern Dark Mode as the primary theme.
-- **REQ-1.2**: Upgrade typography to a modern sans-serif font (e.g., Inter, Roboto, or Outfit) using Google Fonts or local assets.
-- **REQ-1.3**: Add smooth hover states, transitions, and micro-animations to buttons, inputs, and diff row highlights.
-- **REQ-1.4**: Redesign the header/controls area to be a modern, potentially sticky, glassmorphism-styled toolbar.
+## Category: History (Undo/Redo)
 
-## Epic 2: Performance & "Smoothness"
-- **REQ-2.1**: Ensure the diff algorithm does not block the main thread on large files (consider Web Workers or chunked processing if necessary).
-- **REQ-2.2**: Optimize DOM rendering for large diffs (e.g., virtualization or efficient DOM updates) to maintain 60FPS scrolling.
+- [ ] **HIST-01**: User can press Ctrl+Z to undo the last text change (global single stack covering both panels)
+- [ ] **HIST-02**: User can press Ctrl+Y (or Ctrl+Shift+Z) to redo a previously undone change
+- [ ] **HIST-03**: Undo/redo history is cleared when the user triggers a diff reset or "Clear All" action
 
-## Epic 3: Core Functionality Enhancements
-- **REQ-3.1**: Refine side-by-side alignment logic for mixed blocks and LaTeX (building on recent codebase updates).
-- **REQ-3.2**: Improve inline word highlighting within changed rows to be visually distinct but harmonious with the new theme.
+## Category: Empty Startup
+
+- [ ] **STRT-01**: When the app opens, both panels are empty — no sample text is auto-loaded
+- [ ] **STRT-02**: Each panel displays a meaningful placeholder hint ("Paste your text here...") when empty
+- [ ] **STRT-03**: Any "Load Sample" button/action is either removed or retained only as a manual trigger (no auto-invocation on load)
+
+## Future Requirements (Deferred)
+
+- Per-panel independent undo/redo stacks — deferred; global stack chosen for simplicity in v1.1
+- Persistent session history across page reloads — out of scope for this milestone
+
+## Out of Scope
+
+- Framework-based state management (Redux, MobX, etc.) — violates NO Frameworks constraint
+- Server-side history storage — violates LOCAL & OFFLINE constraint
+
+## Traceability
+
+| REQ-ID  | Phase |
+|---------|-------|
+| HIST-01 | 6     |
+| HIST-02 | 6     |
+| HIST-03 | 6     |
+| STRT-01 | 5     |
+| STRT-02 | 5     |
+| STRT-03 | 5     |
