@@ -18,8 +18,16 @@ let viewMode = "edit";
 const compareButton = document.querySelector("#compareButton");
 
 // --- Undo/Redo Engine ---
+const undoButton = document.querySelector("#undoButton");
+const redoButton = document.querySelector("#redoButton");
+
 let undoStack = [];
 let redoStack = [];
+
+function updateHistoryButtons() {
+  if (undoButton) undoButton.disabled = undoStack.length <= 1;
+  if (redoButton) redoButton.disabled = redoStack.length === 0;
+}
 
 function resetHistory() {
   undoStack = [{
@@ -28,6 +36,7 @@ function resetHistory() {
     timestamp: Date.now()
   }];
   redoStack = [];
+  updateHistoryButtons();
 }
 
 function captureHistory() {
@@ -46,6 +55,7 @@ function captureHistory() {
   } else {
     undoStack.push(currentState);
   }
+  updateHistoryButtons();
 }
 
 function undoHistory() {
@@ -56,6 +66,7 @@ function undoHistory() {
   const previousState = undoStack[undoStack.length - 1];
   originalInput.value = previousState.original;
   modifiedInput.value = previousState.modified;
+  updateHistoryButtons();
   compare();
 }
 
@@ -67,6 +78,7 @@ function redoHistory() {
 
   originalInput.value = nextState.original;
   modifiedInput.value = nextState.modified;
+  updateHistoryButtons();
   compare();
 }
 // ------------------------
@@ -857,6 +869,9 @@ document.addEventListener("keydown", (event) => {
     redoHistory();
   }
 });
+if (undoButton) undoButton.addEventListener("click", undoHistory);
+if (redoButton) redoButton.addEventListener("click", redoHistory);
+
 document.querySelector("#sampleButton").addEventListener("click", () => {
   if (Object.keys(window.ubmk26Sample || {}).length > 0) {
     originalInput.value = window.ubmk26Sample.original;
