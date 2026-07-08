@@ -442,7 +442,7 @@ body.resizing-editors {
 }
 
 .aligned-cell.is-merged-left::after {
-  content: "⟵ Modified";
+  content: "Modified ⟶";
   position: absolute;
   left: 0;
   top: 50%;
@@ -460,7 +460,7 @@ body.resizing-editors {
 }
 
 .aligned-cell.is-merged-right::after {
-  content: "Original ⟶";
+  content: "⟵ Original";
   position: absolute;
   right: 0;
   top: 50%;
